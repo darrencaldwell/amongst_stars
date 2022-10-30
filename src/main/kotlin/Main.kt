@@ -31,8 +31,9 @@ const val HOST_TCP_PORT = 25565
 const val MAGIC_ROOM_ID = 1337
 const val ENABLE_MULTIPLAYER = false
 var gameScreen = 0
+var timeSinceLastUpdate: Long = 0
 // ms
-var TIME_SINCE_LAST_STATE_UPDATE = 100
+const val TIME_BETWEEN_PACKET_UPDATE: Long = 10 * 1000000
 
 operator fun PVector.times(other: Float) = PVector.mult(this, other)
 operator fun PVector.plus(other: PVector) = PVector.add(this, other)
@@ -111,8 +112,6 @@ data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float 
 }
 
 
-
-
 /**
  * The driver defining the flow of the game,
  * handling input, render control, etc
@@ -132,7 +131,7 @@ class Game : PApplet() {
     val moon = WallE(PVector(0f, 0f, EARTH_RADIUS*2f), 50f)
 
     override fun setup() {
-
+        frameRate(60F)
     }
 
     override fun settings() {
@@ -274,12 +273,19 @@ class Game : PApplet() {
         gameScreen = 1
     }
 
+    var counter = 0
     override fun draw() {
 
         if (gameScreen == 0) {
             homeScreen()
         } else {
+            val deltaT = System.nanoTime() - timeSinceLastUpdate
             gameScreen()
+            timeSinceLastUpdate = System.nanoTime()
+            if (deltaT >= TIME_BETWEEN_PACKET_UPDATE) {
+                // rx state, tx state
+                timeSinceLastUpdate = 0
+            }
         }
     }
 

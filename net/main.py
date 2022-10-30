@@ -40,7 +40,9 @@ def rx_json_udp(socket):
     data, addr = socket.recvfrom(4096)
     data = data.decode(ENCODING).rstrip('\x00').rstrip('\n')
     print("rx_json_udp: got udp rx from " + str(addr))
-    return json.loads(data)
+    json_data = json.loads(data)
+    json_data['addr'] = addr
+    return json_data
 
 
 def thread_on_new_client(client_socket, addr):
@@ -111,25 +113,45 @@ def thread_new_room(room_id):
 
     print(rx_json_udp(rx_udp_socket))
 
-    # send initial game state
-
-
-
-## start udp listener
-def thread_new_game(room_id, udp_socket):
-    # set initial game state
+    # send initial state
     state = {
         "space_boy" : {
         },
         "wallee": {
         }
     }
-    # send initial game state
-    time.sleep(5)
-    data = json.dumps(state).encode(ENCODING)
-    udp_socket.sendall(bytes(data))
-    # listen for updates every 10ms
-    # send state
+
+
+    """
+    {
+        "other_x": 1,
+        "other_y": 2,
+        "angle": 23
+    }
+    
+    """
+
+    # busy loop
+    player_a_state = {}
+    player_b_state = {}
+    while True:
+        player_a_update = False
+        player_b_update = False
+        # read in packets until player a and b updated
+        packet_data = rx_json_udp(rx_udp_socket)
+        if packet_data['addr'] == ip_addr_a:
+            player_a_update = True
+            player_a_state = packet_data
+        else:
+            player_b_update = True
+            player_b_state = packet_data
+        
+        if player_a_update and player_b_update:
+            # send appropriate state to other player
+
+
+    # send player a, b's info
+    # send player b, a's info
 
 
 def start_server():
