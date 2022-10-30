@@ -13,7 +13,7 @@ import threading
 import time
 import json
 
-HOST = "pc8-015-l.cs.st-andrews.ac.uk"
+HOST = "pc8-016-l.cs.st-andrews.ac.uk"
 TCP_PORT = 25565
 ENCODING = "utf-8"
 
@@ -39,7 +39,6 @@ def tx_json_udp(socket, address, port, json_data):
 def rx_json_udp(socket):
     data, addr = socket.recvfrom(4096)
     data = data.decode(ENCODING).rstrip('\x00').rstrip('\n')
-    print("rx_json_udp: got udp rx from " + str(addr))
     json_data = json.loads(data)
     json_data['addr'] = addr
     return json_data
@@ -91,9 +90,11 @@ def thread_new_room(room_id):
     port = rx_udp_socket.getsockname()[1]
 
     # send server UDP ports to clients
-    data = {"server_port": port}
-    tx_json_tcp(socket_a, data)
-    tx_json_tcp(socket_b, data)
+    data_a = {"server_port": port,"player":1}
+    data_b = {"server_port": port,"player":2}
+
+    tx_json_tcp(socket_a, data_a)
+    tx_json_tcp(socket_b, data_b)
 
     # get tx UDP ports from clients
     player_a_udp_port = rx_json(socket_a)["port"]
@@ -107,12 +108,6 @@ def thread_new_room(room_id):
     tx_udp_socket_a = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     tx_udp_socket_b = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    data = {"hello": "cow person"}
-    tx_json_udp(tx_udp_socket_a, ip_addr_a, player_a_udp_port, data)
-    tx_json_udp(tx_udp_socket_b, ip_addr_b, player_b_udp_port, data)
-
-    print(rx_json_udp(rx_udp_socket))
-
     # send initial state
     state = {
         "space_boy" : {
@@ -123,10 +118,12 @@ def thread_new_room(room_id):
 
 
     """
+    STATE
     {
-        "other_x": 1,
-        "other_y": 2,
-        "angle": 23
+        "x": 1,
+        "y": 2,
+        "angle": 23,
+        "events": ["bomb": {x, y, angle}]
     }
     
     """
@@ -134,12 +131,13 @@ def thread_new_room(room_id):
     # busy loop
     player_a_state = {}
     player_b_state = {}
+    player_a_update = False
+    player_b_update = False
     while True:
-        player_a_update = False
-        player_b_update = False
         # read in packets until player a and b updated
         packet_data = rx_json_udp(rx_udp_socket)
-        if packet_data['addr'] == ip_addr_a:
+        print(packet_data)
+        if packet_data['addr'][0] == ip_addr_a:
             player_a_update = True
             player_a_state = packet_data
         else:
@@ -147,12 +145,11 @@ def thread_new_room(room_id):
             player_b_state = packet_data
         
         if player_a_update and player_b_update:
-            # send appropriate state to other player
-
-
-    # send player a, b's info
-    # send player b, a's info
-
+            # send state to other player
+            player_a_update = False
+            player_b_update = False
+            tx_json_udp(tx_udp_socket_a, ip_addr_a, player_a_udp_port, player_b_state)
+            tx_json_udp(tx_udp_socket_b, ip_addr_b, player_b_udp_port, player_a_state)
 
 def start_server():
     print("Starting Server...")
