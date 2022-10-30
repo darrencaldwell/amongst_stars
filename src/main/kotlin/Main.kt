@@ -28,7 +28,7 @@ const val EARTH_RADIUS = 100f
 const val HOST = "pc8-016-l.cs.st-andrews.ac.uk"
 const val HOST_TCP_PORT = 25565
 const val MAGIC_ROOM_ID = 1337
-const val ENABLE_MULTIPLAYER = false
+const val ENABLE_MULTIPLAYER = true
 var gameScreen = 0
 var timeSinceLastUpdate: Long = 0
 // ms
@@ -303,7 +303,7 @@ class Game : PApplet() {
     }
 
     var killedEnemies = mutableListOf<Enemy>()
-    var wallELives = 3
+    var wallELives = 50
     var invincibleTime = 1000f
     var lastHit = 0L
 
