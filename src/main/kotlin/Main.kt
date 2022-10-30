@@ -446,6 +446,8 @@ class Game : PApplet() {
                     val rx_buffer = ByteArray(4096)
                     val rx_packet = DatagramPacket(rx_buffer, rx_buffer.size)
                     server_udp_socket.receive(rx_packet)
+                    val rx = JSONObject(String(rx_packet.data))
+                    println(rx)
                     // TODO: update state with other player
                 } catch (e: SocketTimeoutException) {
 
