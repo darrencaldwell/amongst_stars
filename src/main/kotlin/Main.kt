@@ -1,7 +1,9 @@
 import processing.core.PApplet
 import processing.core.PVector
+import processing.core.PVector.dist
 import java.util.InputMismatchException
 import kotlin.math.*
+import kotlin.random.Random
 
 
 // game loop driver fun
@@ -45,41 +47,63 @@ fun SphericalCoords.toXyz(): PVector {
 
 fun PVector.toSpherical(): SphericalCoords {
     val r = sqrt(x.pow(2) + y.pow(2) + z.pow(2))
-    val theta = atan(y/x)
-    val phi = acos(z/r)
+    val theta = atan(y / x)
+    val phi = acos(z / r)
     return SphericalCoords(theta, phi, r)
 }
 
-data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float = 0f) {
+data class Scrap(val pos:SphericalCoords, val size: Float= 3f) {
     fun draw(app: PApplet) {
-        val position = pos.toXyz()
-//        val posToUp = position.cross(PVector(0f,1f,0f))
-
-        with(app) {
-            pushMatrix()
-            translate(position.x,position.y,position.z)
-            circle(0f,0f,size)
-            popMatrix()
-        }
+        drawThings(pos, size, app)
+    }
+}
+data class Enemy(val pos:SphericalCoords, val size: Float=5f, var rot: Float=0f) {
+    fun draw(app : PApplet) {
+        drawThings(pos, size, app)
     }
 
+    fun update(wallE: WallE) {
+        val movementSpeed = 0.01f
+        val phi = wallE.pos.phi() - pos.phi()
+        val theta = wallE.pos.theta() - pos.theta()
+        pos.y += phi*movementSpeed
+        pos.x += theta*movementSpeed
+    }
+}
+
+fun drawThings(pos: PVector, size: Float, app: PApplet) {
+    val position = pos.toXyz()
+    with(app) {
+        pushMatrix()
+        translate(position.x,position.y,position.z)
+        sphere(size)
+        popMatrix()
+    }
+}
+
+
+
+data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float = 0f) {
+
+    fun draw(app : PApplet) {
+        drawThings(pos, size, app)
+    }
     fun update(input: Input) {
         val movementSpeed = 0.01f
         val lookSpeed = 0.01f
 
 //        var isMoving = false
-//        when {
-////            input.isUp -> isMoving = true
-////            input.isDown -> pos.x -= movementSpeed
-////            input.isLeft -> rot += lookSpeed
-////            input.isRight -> rot -= lookSpeed
-//            input.isUp -> pos.x += movementSpeed
+        when {
+//            input.isUp -> isMoving = true
 //            input.isDown -> pos.x -= movementSpeed
-//            input.isLeft -> pos.y += lookSpeed
-//            input.isRight -> pos.y -= lookSpeed
-//        }
+//            input.isLeft -> rot += lookSpeed
+//            input.isRight -> rot -= lookSpeed
+            input.isUp -> pos.x += movementSpeed
+            input.isDown -> pos.x -= movementSpeed
+            input.isLeft -> pos.y += lookSpeed
+            input.isRight -> pos.y -= lookSpeed//                pos.x
 
-
+        }
 //         actually move!!!
 //        val wallePos = pos.toXyz()
 //        val u = wallePos.copy().normalize()
@@ -88,9 +112,15 @@ data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float 
 ////        val newPosCart = u * u.dot(x) + u.cross(x) * cos(rot) + u.cross(x) * sin(rot)
 //        val a = wallePos.add(PVector(0.01f, 0f, 0f))
 
-        pos.set(pos.toXyz().add(0f,0f,1f).toSpherical())
+//        pos.set(pos.toXyz().add(0f,0f,1f).toSpherical())
 //        pos.set(wallePos.toSpherical())
 
+    }
+    fun checkCollision(app: PApplet, toCheckPos: PVector, toCheckSize: Float): Boolean {
+        val wallePos = pos.toXyz()
+        with(app) {
+            return dist(wallePos, toCheckPos.toXyz()) < size+toCheckSize
+        }
     }
 }
 
@@ -111,20 +141,39 @@ class Game : PApplet() {
 
     val cameraMode: CameraMode = CameraMode.TOPDOWN
     val input: Input = Input()
+    val enemies = mutableListOf<Enemy>()
+    val scraps = mutableListOf<Scrap>()
+    val wallE = WallE(SphericalCoords(0f,0f, EARTH_RADIUS+2f))
+    val moon = WallE(SphericalCoords(0f, 0f, EARTH_RADIUS*2f), 50f)
+    val scrapCounter = 0
 
-    val wallE = WallE(PVector(0f,0f, EARTH_RADIUS+2f))
-    val moon = WallE(PVector(0f, 0f, EARTH_RADIUS*2f), 50f)
 
     override fun setup() {
-
+        addEnemy()
+        addEnemy()
     }
 
     override fun settings() {
         fullScreen(P3D)
     }
 
+    fun addEnemy() {
+        var randStartX = Random.nextFloat()*2f*Math.PI
+        var randStartY = Random.nextFloat()*2f*Math.PI
+        val enemy = Enemy(SphericalCoords(randStartX.toFloat(), randStartY.toFloat(), EARTH_RADIUS+2f))
+        enemies.add(enemy)
+    }
+
 
     fun camTopDown() {
+        val cartWallE = wallE.pos.toXyz()
+        val centre = cartWallE
+        val eyepos = cartWallE * 2f
+        val up = PVector(0f,1f,0f)
+        camera(eyepos.x, eyepos.y, eyepos.z, centre.x, centre.y, centre.z, up.x,up.y,up.z)
+    }
+
+    fun camTopDownAngled() {
         val cartWallE = wallE.pos.toXyz()
         val centre = cartWallE
         val eyepos = cartWallE * 2f
@@ -179,24 +228,46 @@ class Game : PApplet() {
         }
     }
 
+    fun handleCollisions() {
+
+        enemies.forEach {
+            if (wallE.checkCollision(this, it.pos, it.size)) {
+
+            }
+        }
+
+        scraps.forEach {
+            if (wallE.checkCollision(this, it.pos, it.size)) {
+//                scrapCount += 1
+            }
+        }
+    }
+
+    fun updateMovements() {
+        enemies.forEach { it.update(wallE) }
+        wallE.update(input)
+        moon.pos.x += 0.01f
+    }
+
     override fun draw() {
         background(0f)
-        val eyepos =
-
-//        camera(cartWallE.x, cartWallE.y, cartWallE.z, eyepos.x, eyepos.y, eyepos.z, up.x,up.y,up.z)
         setupCam()
+        val wallEReal = wallE.pos.toXyz()*1.1f
+        pointLight(255f, 255f, 153f, wallEReal.x, wallEReal.y, wallEReal.z);
+        directionalLight(51f, 102f, 126f, -1f, 0f, 0f);
         pushMatrix()
-//        val pos = PVector(width.toFloat()/2f, height.toFloat()/2f,100f)
-//        with(pos) {
-//            translate(x,y,z)
-//        }
+        updateMovements()
         fill(0f, 0f, 200f)
+
         sphere(EARTH_RADIUS)
         fill(255f)
+
+
         wallE.draw(this)
+        enemies.forEach{
+            it.draw(this)
+        }
         moon.draw(this)
-        moon.pos.x += 0.01f
-        wallE.update(input)
         popMatrix()
     }
 
