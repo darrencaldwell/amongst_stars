@@ -144,17 +144,11 @@ data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float 
         val lookSpeed = 0.01f
 
 //        var isMoving = false
-        when {
-//            input.isUp -> isMoving = true
-//            input.isDown -> pos.x -= movementSpeed
-//            input.isLeft -> rot += lookSpeed
-//            input.isRight -> rot -= lookSpeed
-            input.isUp -> pos.x += movementSpeed
-            input.isDown -> pos.x -= movementSpeed
-            input.isLeft -> pos.y += lookSpeed
-            input.isRight -> pos.y -= lookSpeed//                pos.x
 
-        }
+        if (input.isUp) pos.x += movementSpeed
+        if (input.isDown ) pos.x -= movementSpeed
+        if (input.isLeft ) pos.y += lookSpeed
+        if (input.isRight) pos.y -= lookSpeed//
 //         actually move!!!
 //        val wallePos = pos.toXyz()
 //        val u = wallePos.copy().normalize()
@@ -351,17 +345,10 @@ class Game : PApplet() {
     fun runGame() {
         background(0f)
         setupCam()
-//        val wallEReal = wallE.pos.toXyz()*1.1f
-//        pointLight(255f, 255f, 153f, wallEReal.x, wallEReal.y, wallEReal.z);
-//        directionalLight(51f, 102f, 126f, -1f, 0f, 0f);
+
+        noStroke()
+
         pushMatrix()
-        updateMovements()
-        fill(0f, 0f, 200f)
-        sphere(EARTH_RADIUS)
-        fill(255f)
-//        noStroke()
-        spaceWallE.draw(this)
-        wallE.draw(this)
         val bombGrow = 0.01f
         if(isExploding) {
             bombWallE?.pos?.let {
@@ -375,11 +362,39 @@ class Game : PApplet() {
                 bombWallE = null
                 isExploding = false
             }
-        } else bombWallE?.draw(this)
+        }
+
+        popMatrix()
+
+        val wallEReal = wallE.pos.toXyz()*1.1f
+        val ambience = 35f
+        ambientLight(ambience,ambience,ambience)
+        pointLight(255f, 255f, 153f, wallEReal.x, wallEReal.y, wallEReal.z);
+        directionalLight(51f, 102f, 126f, -1f, 0f, 0f);
+        pushMatrix()
+        updateMovements()
+        fill(0f, 0f, 200f)
+        sphere(EARTH_RADIUS)
+        // space wallE is pink
+        fill(222f,165f,164f)
+        spaceWallE.draw(this)
+        // earth wallE is grey
+        fill(222f)
+        wallE.draw(this)
+        // enemies are red
+        fill(255f,0f,0f)
         enemies.forEach{
             it.draw(this)
         }
+        // moon is white
+        fill(255f)
         moon.draw(this)
+
+        // bombs are orange
+        if (!isExploding) {
+            fill(255f,50f,0f)
+            bombWallE?.draw(this)
+        }
         popMatrix()
     }
 
