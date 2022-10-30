@@ -28,11 +28,11 @@ const val EARTH_RADIUS = 100f
 const val HOST = "pc8-016-l.cs.st-andrews.ac.uk"
 const val HOST_TCP_PORT = 25565
 const val MAGIC_ROOM_ID = 1337
-const val ENABLE_MULTIPLAYER = true
+const val ENABLE_MULTIPLAYER = false
 var gameScreen = 0
 var timeSinceLastUpdate: Long = 0
 // ms
-const val TIME_BETWEEN_PACKET_UPDATE: Long = 10 * 1000000
+const val TIME_BETWEEN_PACKET_UPDATE: Long = 1 * 1000000
 
 var server_udp_port: Int = -1
 val server_udp_socket = DatagramSocket()
@@ -144,17 +144,11 @@ data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float 
         val lookSpeed = 0.01f
 
 //        var isMoving = false
-        when {
-//            input.isUp -> isMoving = true
-//            input.isDown -> pos.x -= movementSpeed
-//            input.isLeft -> rot += lookSpeed
-//            input.isRight -> rot -= lookSpeed
-            input.isUp -> pos.x += movementSpeed
-            input.isDown -> pos.x -= movementSpeed
-            input.isLeft -> pos.y += lookSpeed
-            input.isRight -> pos.y -= lookSpeed//                pos.x
 
-        }
+        if (input.isUp) pos.x += movementSpeed
+        if (input.isDown ) pos.x -= movementSpeed
+        if (input.isLeft ) pos.y += lookSpeed
+        if (input.isRight) pos.y -= lookSpeed//
 //         actually move!!!
 //        val wallePos = pos.toXyz()
 //        val u = wallePos.copy().normalize()
@@ -372,17 +366,10 @@ class Game : PApplet() {
     fun runGame() {
         background(0f)
         setupCam()
-//        val wallEReal = wallE.pos.toXyz()*1.1f
-//        pointLight(255f, 255f, 153f, wallEReal.x, wallEReal.y, wallEReal.z);
-//        directionalLight(51f, 102f, 126f, -1f, 0f, 0f);
+
+        noStroke()
+
         pushMatrix()
-        updateMovements()
-        fill(0f, 0f, 200f)
-        sphere(EARTH_RADIUS)
-        fill(255f)
-//        noStroke()
-        spaceWallE.draw(this)
-        wallE.draw(this)
         val bombGrow = 0.01f
         if(isExploding) {
             bombWallE?.pos?.let {
@@ -400,11 +387,39 @@ class Game : PApplet() {
                 bombWallE = null
                 isExploding = false
             }
-        } else bombWallE?.draw(this)
+        }
+
+        popMatrix()
+
+        val wallEReal = wallE.pos.toXyz()*1.1f
+        val ambience = 35f
+        ambientLight(ambience,ambience,ambience)
+        pointLight(255f, 255f, 153f, wallEReal.x, wallEReal.y, wallEReal.z);
+        directionalLight(51f, 102f, 126f, -1f, 0f, 0f);
+        pushMatrix()
+        updateMovements()
+        fill(0f, 0f, 200f)
+        sphere(EARTH_RADIUS)
+        // space wallE is pink
+        fill(222f,165f,164f)
+        spaceWallE.draw(this)
+        // earth wallE is grey
+        fill(222f)
+        wallE.draw(this)
+        // enemies are red
+        fill(255f,0f,0f)
         enemies.forEach{
             it.draw(this)
         }
+        // moon is white
+        fill(255f)
         moon.draw(this)
+
+        // bombs are orange
+        if (!isExploding) {
+            fill(255f,50f,0f)
+            bombWallE?.draw(this)
+        }
         popMatrix()
     }
 
@@ -470,30 +485,34 @@ class Game : PApplet() {
         } else {
             val deltaT = System.nanoTime() - timeSinceLastUpdate
             runGame()
-            timeSinceLastUpdate = System.nanoTime()
-            if (deltaT >= TIME_BETWEEN_PACKET_UPDATE) {
-                // tx state and rx state
-                timeSinceLastUpdate = 0
-                // tx
-                val coords = if (player==1) wallE.pos else spaceWallE.pos
-//                val thetaStr = "%.${scale}f".format(input)
-                val tx_buffer = "{\"theta\":${(coords.x * 1000).toInt()}, \"phi\":${(coords.y * 1000).toInt()}, \"bomb\": ${bombWallE != null}}".toByteArray()
-                val tx_packet = DatagramPacket(tx_buffer, tx_buffer.size, InetAddress.getByName(HOST), server_udp_port)
-                tx_udp_socket.send(tx_packet)
-                // rx
-                try {
-                    val rx_buffer = ByteArray(4096)
-                    val rx_packet = DatagramPacket(rx_buffer, rx_buffer.size)
-                    server_udp_socket.receive(rx_packet)
-                    val rx = JSONObject(String(rx_packet.data))
-                    other_theta = rx["theta"] as Int / 1000f
-                    other_phi = rx["phi"] as Int / 1000f
-                    bomb = rx["bomb"] as Boolean
-                    // TODO: update state with other player
-                } catch (e: SocketTimeoutException) {
+            if (ENABLE_MULTIPLAYER) {
 
+                timeSinceLastUpdate = System.nanoTime()
+                if (deltaT >= TIME_BETWEEN_PACKET_UPDATE) {
+                    // tx state and rx state
+                    timeSinceLastUpdate = 0
+                    // tx
+                    val coords = if (player==1) wallE.pos else spaceWallE.pos
+//                val thetaStr = "%.${scale}f".format(input)
+                    val tx_buffer = "{\"theta\":${(coords.x * 1000).toInt()}, \"phi\":${(coords.y * 1000).toInt()}, \"bomb\": ${bombWallE != null}}".toByteArray()
+                    val tx_packet = DatagramPacket(tx_buffer, tx_buffer.size, InetAddress.getByName(HOST), server_udp_port)
+                    tx_udp_socket.send(tx_packet)
+                    // rx
+                    try {
+                        val rx_buffer = ByteArray(4096)
+                        val rx_packet = DatagramPacket(rx_buffer, rx_buffer.size)
+                        server_udp_socket.receive(rx_packet)
+                        val rx = JSONObject(String(rx_packet.data))
+                        other_theta = rx["theta"] as Int / 1000f
+                        other_phi = rx["phi"] as Int / 1000f
+                        bomb = rx["bomb"] as Boolean
+                        // TODO: update state with other player
+                    } catch (e: SocketTimeoutException) {
+
+                    }
                 }
             }
+
         }
     }
 
