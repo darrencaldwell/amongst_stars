@@ -33,6 +33,7 @@ const val HOST_TCP_PORT = 25565
 const val MAGIC_ROOM_ID = 1337
 const val ENABLE_MULTIPLAYER = false
 var gameScreen = 0
+var isWallE = 0 // 1 is if it is wallE
 // ms
 var TIME_SINCE_LAST_STATE_UPDATE = 100
 
@@ -104,6 +105,11 @@ data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float 
     fun draw(app : PApplet) {
         drawThings(pos, size, app)
     }
+
+    fun randUpdate() {
+        pos.x += 0.01f
+        pos.y += 0.02f
+    }
     fun update(input: Input) {
         val movementSpeed = 0.01f
         val lookSpeed = 0.01f
@@ -160,7 +166,9 @@ class Game : PApplet() {
     val enemies = mutableListOf<Enemy>()
     val scraps = mutableListOf<Scrap>()
     val wallE = WallE(SphericalCoords(0f,0f, EARTH_RADIUS+2f))
-    val moon = WallE(SphericalCoords(0f, 0f, EARTH_RADIUS*2f), 50f)
+    val spaceWallE = WallE(SphericalCoords(0f, 0f, EARTH_RADIUS*3f), 10f)
+    val moon = WallE(SphericalCoords(0f, 0f, EARTH_RADIUS*5f), 50f)
+    var bombWallE: WallE? = null
     val scrapCounter = 0
 
 
@@ -182,18 +190,25 @@ class Game : PApplet() {
 
 
     fun camTopDown() {
-        val cartWallE = wallE.pos.toXyz()
+        var cartWallE: PVector = if(isWallE == 1)
+            wallE.pos.toXyz()
+        else
+            spaceWallE.pos.toXyz()
         val centre = cartWallE
-        val eyepos = cartWallE * 2f
+        val eyepos = cartWallE * 1.2f
         val up = PVector(0f,1f,0f)
         camera(eyepos.x, eyepos.y, eyepos.z, centre.x, centre.y, centre.z, up.x,up.y,up.z)
     }
 
     fun camTopDownAngled() {
-        val cartWallE = wallE.pos.toXyz()
+        val cartWallE = spaceWallE.pos.toXyz()
+        val wallE2 = spaceWallE.pos.copy()
+//        wallE2.x += 5f
+//        wallE2.y += 5f
         val centre = cartWallE
-        val eyepos = cartWallE * 2f
+        var eyepos = wallE2.toXyz() * 2f
         val up = PVector(0f,1f,0f)
+//        eyepos = up.cross(eyepos)
         camera(eyepos.x, eyepos.y, eyepos.z, centre.x, centre.y, centre.z, up.x,up.y,up.z)
     }
 
@@ -231,6 +246,10 @@ class Game : PApplet() {
                 RIGHT -> input.isRight = true
             }
         }
+        if(key == ' ') {
+//            println("ahhh")
+            bombWallE = WallE(spaceWallE.pos.copy(), 5f)
+        }
     }
 
     override fun keyReleased() {
@@ -265,32 +284,72 @@ class Game : PApplet() {
         }
     }
 
+    var bombTime = 1000f
+    var bombStartTime = 0L
+    var isExploding = false
+
     fun updateMovements() {
         enemies.forEach { it.update(wallE) }
-        wallE.update(input)
-        moon.pos.x += 0.01f
+        if(isWallE == 1) {
+            spaceWallE.randUpdate()
+            wallE.update(input)
+        }
+        else {
+            wallE.randUpdate()
+            spaceWallE.update(input)
+        }
+
+        if(!isExploding && bombWallE != null) {
+            bombWallE!!.pos.z -= 1f
+            if (bombWallE!!.pos.z < EARTH_RADIUS) {
+                isExploding = true
+                bombStartTime = System.currentTimeMillis()
+            }
+        }
+        moon.pos.x += 0.001f
     }
 
-    override fun draw() {
+    fun runGame() {
         background(0f)
         setupCam()
-        val wallEReal = wallE.pos.toXyz()*1.1f
-        pointLight(255f, 255f, 153f, wallEReal.x, wallEReal.y, wallEReal.z);
-        directionalLight(51f, 102f, 126f, -1f, 0f, 0f);
+//        val wallEReal = wallE.pos.toXyz()*1.1f
+//        pointLight(255f, 255f, 153f, wallEReal.x, wallEReal.y, wallEReal.z);
+//        directionalLight(51f, 102f, 126f, -1f, 0f, 0f);
         pushMatrix()
         updateMovements()
         fill(0f, 0f, 200f)
-
         sphere(EARTH_RADIUS)
         fill(255f)
-
-
+//        noStroke()
+        spaceWallE.draw(this)
         wallE.draw(this)
+        val bombGrow = 0.01f
+        if(isExploding) {
+            bombWallE?.pos?.let {
+                with (it.toXyz()) {
+                    translate(x,y,z)
+                    fill(255f,255f,8f)
+                    sphere((System.currentTimeMillis()-bombStartTime) * bombGrow)
+                }
+            }
+            if(System.currentTimeMillis() - bombStartTime >= bombTime) {
+                bombWallE = null
+                isExploding = false
+            }
+        } else bombWallE?.draw(this)
         enemies.forEach{
             it.draw(this)
         }
         moon.draw(this)
         popMatrix()
+    }
+
+    override fun draw() {
+        if (gameScreen == 0) {
+            homeScreen()
+        } else {
+            runGame()
+        }
     }
 
     override fun mousePressed() {
