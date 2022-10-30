@@ -451,7 +451,8 @@ class Game : PApplet() {
                 timeSinceLastUpdate = 0
                 // tx
                 val coords = if (player==1) wallE.pos else spaceWallE.pos
-                val tx_buffer = "{\"theta\":${coords.x as Float}, \"phi\":${coords.y as Float}, \"bomb\": ${bombWallE != null}}".toByteArray()
+//                val thetaStr = "%.${scale}f".format(input)
+                val tx_buffer = "{\"theta\":${(coords.x * 1000).toInt()}, \"phi\":${(coords.y * 1000).toInt()}, \"bomb\": ${bombWallE != null}}".toByteArray()
                 val tx_packet = DatagramPacket(tx_buffer, tx_buffer.size, InetAddress.getByName(HOST), server_udp_port)
                 tx_udp_socket.send(tx_packet)
                 // rx
@@ -460,8 +461,8 @@ class Game : PApplet() {
                     val rx_packet = DatagramPacket(rx_buffer, rx_buffer.size)
                     server_udp_socket.receive(rx_packet)
                     val rx = JSONObject(String(rx_packet.data))
-                    other_theta = rx["theta"] as Float
-                    other_phi = rx["phi"] as Float
+                    other_theta = rx["theta"] as Int / 1000f
+                    other_phi = rx["phi"] as Int / 1000f
                     bomb = rx["bomb"] as Boolean
                     // TODO: update state with other player
                 } catch (e: SocketTimeoutException) {
