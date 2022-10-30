@@ -30,7 +30,7 @@ def rx_json(socket):
 
 def tx_json(socket, json_data):
     msg = bytes(json.dumps(json_data),ENCODING)
-    socket.send(msg)
+    socket.sendall(msg)
 
 
 def thread_on_new_client(client_socket, addr):
@@ -99,7 +99,7 @@ def thread_new_room(room_id):
     tx_udp_socket_b.bind((ip_addr_b, player_b_udp_port))
 
     # send initial game state
-    
+
 
 
 ## start udp listener
