@@ -88,7 +88,7 @@ data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float 
 ////        val newPosCart = u * u.dot(x) + u.cross(x) * cos(rot) + u.cross(x) * sin(rot)
 //        val a = wallePos.add(PVector(0.01f, 0f, 0f))
 
-        pos.set(pos.toXyz().add(0f,0f,0.0000001f).toSpherical())
+        pos.set(pos.toXyz().add(0f,0f,1f).toSpherical())
 //        pos.set(wallePos.toSpherical())
 
     }
