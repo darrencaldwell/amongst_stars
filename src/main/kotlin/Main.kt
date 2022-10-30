@@ -32,7 +32,7 @@ const val ENABLE_MULTIPLAYER = true
 var gameScreen = 0
 var timeSinceLastUpdate: Long = 0
 // ms
-const val TIME_BETWEEN_PACKET_UPDATE: Long = 10 * 1000000
+const val TIME_BETWEEN_PACKET_UPDATE: Long = 1 * 1000000
 
 var server_udp_port: Int = -1
 val server_udp_socket = DatagramSocket()
