@@ -167,11 +167,11 @@ data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float 
 //        pos.set(wallePos.toSpherical())
 
     }
-    fun checkCollision(app: PApplet, toCheckPos: PVector, toCheckSize: Float): Boolean {
-        val wallePos = pos.toXyz()
-        with(app) {
-            return dist(wallePos, toCheckPos.toXyz()) < size+toCheckSize
-        }
+}
+
+fun checkCollision(app: PApplet, aPos: SphericalCoords, aSize: Float, bPos: SphericalCoords, bSize: Float): Boolean {
+    with(app) {
+        return dist(aPos.toXyz(), bPos.toXyz()) < aSize+bSize
     }
 }
 
@@ -188,12 +188,12 @@ class Game : PApplet() {
         FPS,
     }
 
-    val cameraMode: CameraMode = CameraMode.TOPDOWN
+    var cameraMode: CameraMode = CameraMode.TOPDOWN
     val input: Input = Input()
     val enemies = mutableListOf<Enemy>()
     val scraps = mutableListOf<Scrap>()
     val wallE = WallE(SphericalCoords(0f,0f, EARTH_RADIUS+2f))
-    val spaceWallE = WallE(SphericalCoords(0f, 0f, EARTH_RADIUS*3f), 10f)
+    val spaceWallE = WallE(SphericalCoords(0f, 0f, EARTH_RADIUS*3f), 35f)
     val moon = WallE(SphericalCoords(0f, 0f, EARTH_RADIUS*5f), 50f)
     var bombWallE: WallE? = null
     val scrapCounter = 0
@@ -224,7 +224,7 @@ class Game : PApplet() {
         else
             spaceWallE.pos.toXyz()
         val centre = cartWallE
-        var eyepos = cartWallE * 1.2f
+        var eyepos = cartWallE * 1.05f
         if(player == 1)
                 eyepos = cartWallE * 2f
         val up = PVector(0f,1f,0f)
@@ -278,12 +278,17 @@ class Game : PApplet() {
             }
         }
         if(key == ' ') {
-//            println("ahhh")
             bombWallE = createBombWallE()
+        }
+        if(key == 'b' && player == 1) {
+            cameraMode = CameraMode.BOTTOMUP
+        }
+        if(key == 't' && player == 1) {
+            cameraMode = CameraMode.TOPDOWN
         }
     }
 
-    fun createBombWallE() = WallE(spaceWallE.pos.copy(), 5f)
+    fun createBombWallE() = WallE(spaceWallE.pos.copy(), 10f)
 
 
     override fun keyReleased() {
@@ -303,16 +308,30 @@ class Game : PApplet() {
         text("Click to start", height/2.toFloat(), width/2.toFloat());
     }
 
+    var killedEnemies = mutableListOf<Enemy>()
+    var wallELives = 3
+    var invincibleTime = 1000
+    var lastHit = 0f
+
     fun handleCollisions() {
-
         enemies.forEach {
-            if (wallE.checkCollision(this, it.pos, it.size)) {
-
+            if (checkCollision(this, wallE.pos, wallE.size, it.pos, it.size)) {
+                println("was hit!")
+                if(System.currentTimeMillis() - lastHit > invincibleTime) {
+                    lastHit = System.currentTimeMillis().toFloat()
+                    wallELives--
+                }
+            }
+            if (bombWallE != null && checkCollision(this, bombWallE!!.pos, currExplosionSize, it.pos, it.size)) {
+                killedEnemies.add(it)
             }
         }
-
+        killedEnemies.forEach{
+            enemies.remove(it)
+        }
+        killedEnemies.clear()
         scraps.forEach {
-            if (wallE.checkCollision(this, it.pos, it.size)) {
+            if (checkCollision(this, wallE.pos, wallE.size, it.pos, it.size)) {
 //                scrapCount += 1
             }
         }
@@ -339,7 +358,7 @@ class Game : PApplet() {
         }
 
         if(!isExploding && bombWallE != null) {
-            bombWallE!!.pos.z -= 1f
+            bombWallE!!.pos.z -= 2.5f
             if (bombWallE!!.pos.z < EARTH_RADIUS) {
                 isExploding = true
                 bombStartTime = System.currentTimeMillis()
@@ -347,6 +366,8 @@ class Game : PApplet() {
         }
         moon.pos.x += 0.001f
     }
+
+    var currExplosionSize = 0f
 
     fun runGame() {
         background(0f)
@@ -366,9 +387,13 @@ class Game : PApplet() {
         if(isExploding) {
             bombWallE?.pos?.let {
                 with (it.toXyz()) {
+                    pushMatrix()
                     translate(x,y,z)
                     fill(255f,255f,8f)
-                    sphere((System.currentTimeMillis()-bombStartTime) * bombGrow)
+                    currExplosionSize = (System.currentTimeMillis()-bombStartTime).toFloat() * bombGrow
+                    sphere(currExplosionSize)
+                    fill(255f)
+                    popMatrix()
                 }
             }
             if(System.currentTimeMillis() - bombStartTime >= bombTime) {
