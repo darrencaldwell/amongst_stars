@@ -279,9 +279,12 @@ class Game : PApplet() {
         }
         if(key == ' ') {
 //            println("ahhh")
-            bombWallE = WallE(spaceWallE.pos.copy(), 5f)
+            bombWallE = createBombWallE()
         }
     }
+
+    fun createBombWallE() = WallE(spaceWallE.pos.copy(), 5f)
+
 
     override fun keyReleased() {
         if (key.code == CODED) {
@@ -322,11 +325,16 @@ class Game : PApplet() {
     fun updateMovements() {
         enemies.forEach { it.update(wallE) }
         if(player == 1) {
-            spaceWallE.randUpdate()
+            spaceWallE.pos.x = other_theta
+            spaceWallE.pos.y = other_phi
+            if(bomb && bombWallE == null) {
+                bombWallE = createBombWallE()
+            }
             wallE.update(input)
         }
         else {
-            wallE.randUpdate()
+            wallE.pos.x = other_theta
+            wallE.pos.y = other_phi
             spaceWallE.update(input)
         }
 
@@ -443,7 +451,7 @@ class Game : PApplet() {
                 timeSinceLastUpdate = 0
                 // tx
                 val coords = if (player==1) wallE.pos else spaceWallE.pos
-                val tx_buffer = "{\"theta\":${coords.x}, \"phi\":${coords.y}, \"bomb\": ${bombWallE != null}}".toByteArray()
+                val tx_buffer = "{\"theta\":${coords.x as Float}, \"phi\":${coords.y as Float}, \"bomb\": ${bombWallE != null}}".toByteArray()
                 val tx_packet = DatagramPacket(tx_buffer, tx_buffer.size, InetAddress.getByName(HOST), server_udp_port)
                 tx_udp_socket.send(tx_packet)
                 // rx
