@@ -1,10 +1,7 @@
 import processing.core.PApplet
 import processing.core.PVector
 import org.json.*
-import java.net.DatagramPacket
-import java.net.DatagramSocket
-import java.net.InetAddress
-import java.net.Socket
+import java.net.*
 import java.util.*
 import javax.xml.crypto.Data
 import kotlin.math.cos
@@ -28,14 +25,20 @@ import kotlin.random.Random
 //}
 
 const val EARTH_RADIUS = 100f
-const val HOST = "pc8-015-l.cs.st-andrews.ac.uk"
+const val HOST = "pc8-016-l.cs.st-andrews.ac.uk"
 const val HOST_TCP_PORT = 25565
 const val MAGIC_ROOM_ID = 1337
-const val ENABLE_MULTIPLAYER = false
+const val ENABLE_MULTIPLAYER = true
 var gameScreen = 0
-var isWallE = 0 // 1 is if it is wallE
+var timeSinceLastUpdate: Long = 0
 // ms
-var TIME_SINCE_LAST_STATE_UPDATE = 100
+const val TIME_BETWEEN_PACKET_UPDATE: Long = 10 * 1000000
+
+var server_udp_port: Int = -1
+val server_udp_socket = DatagramSocket()
+val tx_udp_socket = DatagramSocket()
+
+var player = -1
 
 operator fun PVector.times(other: Float) = PVector.mult(this, other)
 operator fun PVector.plus(other: PVector) = PVector.add(this, other)
@@ -69,11 +72,28 @@ fun PVector.toSpherical(): SphericalCoords {
     return SphericalCoords(theta, phi, r)
 }
 
-data class Scrap(val pos:SphericalCoords, val size: Float= 3f) {
-    fun draw(app: PApplet) {
-        drawThings(pos, size, app)
-    }
+fun PVector.rotateAngleAxis(theta: Float, axis: PVector): PVector {
+    val axisNormalised = axis.copy().normalize()
+    val u = axisNormalised.x
+    val v = axisNormalised.y
+    val w = axisNormalised.z
+
+    val xPrime =
+        u * (u * x + v * y + w * z) * (1.0 - cos(theta)) + x * cos(theta) + (-w * y + v * z) * sin(
+            theta
+        )
+    val yPrime =
+        v * (u * x + v * y + w * z) * (1.0 - cos(theta)) + y * cos(theta) + (w * x - u * z) * sin(
+            theta
+        )
+    val zPrime =
+        w * (u * x + v * y + w * z) * (1.0 - cos(theta)) + z * cos(theta) + (-v * x + u * y) * sin(
+            theta
+        )
+    return PVector(xPrime.toFloat(), yPrime.toFloat(), zPrime.toFloat())
+
 }
+
 data class Enemy(val pos:SphericalCoords, val size: Float=5f, var rot: Float=0f) {
     fun draw(app : PApplet) {
         drawThings(pos, size, app)
@@ -98,7 +118,11 @@ fun drawThings(pos: PVector, size: Float, app: PApplet) {
     }
 }
 
-
+data class Scrap(val pos:SphericalCoords, val size: Float= 3f) {
+    fun draw(app: PApplet) {
+        drawThings(pos, size, app)
+    }
+}
 
 data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float = 0f) {
 
@@ -147,8 +171,6 @@ data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float 
 }
 
 
-
-
 /**
  * The driver defining the flow of the game,
  * handling input, render control, etc
@@ -173,6 +195,8 @@ class Game : PApplet() {
 
 
     override fun setup() {
+        server_udp_socket.setSoTimeout(1)
+        frameRate(60F)
         addEnemy()
         addEnemy()
     }
@@ -344,14 +368,6 @@ class Game : PApplet() {
         popMatrix()
     }
 
-    override fun draw() {
-        if (gameScreen == 0) {
-            homeScreen()
-        } else {
-            runGame()
-        }
-    }
-
     override fun mousePressed() {
         // if we are on the initial screen when clicked, start the game
         if (gameScreen == 0) {
@@ -378,9 +394,10 @@ class Game : PApplet() {
                 break
             }
             val json_msg = JSONObject(msg)
-            val server_udp_port: Int = json_msg["server_port"] as Int
+            server_udp_port = json_msg["server_port"] as Int
+            player = json_msg["player"] as Int
+            print(player)
 
-            val server_udp_socket = DatagramSocket()
             //server_udp_socket.connect(InetAddress.getByName(HOST), server_udp_port)
             // open local udp socket and connect to remove server udp port
             val client_udp_port = server_udp_socket.localPort
@@ -388,11 +405,10 @@ class Game : PApplet() {
             server_tcp_socket.outputStream.write(("{\"port\":$client_udp_port}").toByteArray())
 
             // rx initial game state
-            val buffer = ByteArray(4096)
-            val packet = DatagramPacket(buffer, buffer.size)
-            server_udp_socket.receive(packet)
+           // val buffer = ByteArray(4096)
+            // val packet = DatagramPacket(buffer, buffer.size)
+            //server_udp_socket.receive(packet)
             // TODO: parse game state and use it to init next screen
-            println(JSONObject(String(packet.data)))
 
             ///  Example tx echo to server
             //val tx_packet = DatagramPacket(packet.data, packet.data.size, InetAddress.getByName(HOST), server_udp_port)
@@ -402,6 +418,35 @@ class Game : PApplet() {
         }
 
         gameScreen = 1
+    }
+
+    var counter = 0
+    override fun draw() {
+
+        if (gameScreen == 0) {
+            homeScreen()
+        } else {
+            val deltaT = System.nanoTime() - timeSinceLastUpdate
+            runGame()
+            timeSinceLastUpdate = System.nanoTime()
+            if (deltaT >= TIME_BETWEEN_PACKET_UPDATE) {
+                // tx state and rx state
+                timeSinceLastUpdate = 0
+                // tx
+                val tx_buffer = "{\"Hello\":123}".toByteArray()
+                val tx_packet = DatagramPacket(tx_buffer, tx_buffer.size, InetAddress.getByName(HOST), server_udp_port)
+                tx_udp_socket.send(tx_packet)
+                // rx
+                try {
+                    val rx_buffer = ByteArray(4096)
+                    val rx_packet = DatagramPacket(rx_buffer, rx_buffer.size)
+                    server_udp_socket.receive(rx_packet)
+                    // TODO: update state with other player
+                } catch (e: SocketTimeoutException) {
+
+                }
+            }
+        }
     }
 
 

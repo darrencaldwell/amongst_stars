@@ -13,7 +13,7 @@ import threading
 import time
 import json
 
-HOST = "pc8-015-l.cs.st-andrews.ac.uk"
+HOST = "pc8-016-l.cs.st-andrews.ac.uk"
 TCP_PORT = 25565
 ENCODING = "utf-8"
 
@@ -39,8 +39,9 @@ def tx_json_udp(socket, address, port, json_data):
 def rx_json_udp(socket):
     data, addr = socket.recvfrom(4096)
     data = data.decode(ENCODING).rstrip('\x00').rstrip('\n')
-    print("rx_json_udp: got udp rx from " + str(addr))
-    return json.loads(data)
+    json_data = json.loads(data)
+    json_data['addr'] = addr
+    return json_data
 
 
 def thread_on_new_client(client_socket, addr):
@@ -89,9 +90,11 @@ def thread_new_room(room_id):
     port = rx_udp_socket.getsockname()[1]
 
     # send server UDP ports to clients
-    data = {"server_port": port}
-    tx_json_tcp(socket_a, data)
-    tx_json_tcp(socket_b, data)
+    data_a = {"server_port": port,"player":1}
+    data_b = {"server_port": port,"player":2}
+
+    tx_json_tcp(socket_a, data_a)
+    tx_json_tcp(socket_b, data_b)
 
     # get tx UDP ports from clients
     player_a_udp_port = rx_json(socket_a)["port"]
@@ -105,32 +108,48 @@ def thread_new_room(room_id):
     tx_udp_socket_a = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     tx_udp_socket_b = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-    data = {"hello": "cow person"}
-    tx_json_udp(tx_udp_socket_a, ip_addr_a, player_a_udp_port, data)
-    tx_json_udp(tx_udp_socket_b, ip_addr_b, player_b_udp_port, data)
-
-    print(rx_json_udp(rx_udp_socket))
-
-    # send initial game state
-
-
-
-## start udp listener
-def thread_new_game(room_id, udp_socket):
-    # set initial game state
+    # send initial state
     state = {
         "space_boy" : {
         },
         "wallee": {
         }
     }
-    # send initial game state
-    time.sleep(5)
-    data = json.dumps(state).encode(ENCODING)
-    udp_socket.sendall(bytes(data))
-    # listen for updates every 10ms
-    # send state
 
+
+    """
+    STATE
+    {
+        "x": 1,
+        "y": 2,
+        "angle": 23,
+        "events": ["bomb": {x, y, angle}]
+    }
+    
+    """
+
+    # busy loop
+    player_a_state = {}
+    player_b_state = {}
+    player_a_update = False
+    player_b_update = False
+    while True:
+        # read in packets until player a and b updated
+        packet_data = rx_json_udp(rx_udp_socket)
+        print(packet_data)
+        if packet_data['addr'][0] == ip_addr_a:
+            player_a_update = True
+            player_a_state = packet_data
+        else:
+            player_b_update = True
+            player_b_state = packet_data
+        
+        if player_a_update and player_b_update:
+            # send state to other player
+            player_a_update = False
+            player_b_update = False
+            tx_json_udp(tx_udp_socket_a, ip_addr_a, player_a_udp_port, player_b_state)
+            tx_json_udp(tx_udp_socket_b, ip_addr_b, player_b_udp_port, player_a_state)
 
 def start_server():
     print("Starting Server...")
