@@ -29,6 +29,8 @@ const val HOST_TCP_PORT = 25565
 const val MAGIC_ROOM_ID = 1337
 const val ENABLE_MULTIPLAYER = false
 var gameScreen = 0
+// ms
+var TIME_SINCE_LAST_STATE_UPDATE = 100
 
 data class Input(
     var isUp: Boolean = false,
