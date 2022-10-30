@@ -28,7 +28,7 @@ const val EARTH_RADIUS = 100f
 const val HOST = "pc8-016-l.cs.st-andrews.ac.uk"
 const val HOST_TCP_PORT = 25565
 const val MAGIC_ROOM_ID = 1337
-const val ENABLE_MULTIPLAYER = true
+const val ENABLE_MULTIPLAYER = false
 var gameScreen = 0
 var timeSinceLastUpdate: Long = 0
 // ms
@@ -445,30 +445,34 @@ class Game : PApplet() {
         } else {
             val deltaT = System.nanoTime() - timeSinceLastUpdate
             runGame()
-            timeSinceLastUpdate = System.nanoTime()
-            if (deltaT >= TIME_BETWEEN_PACKET_UPDATE) {
-                // tx state and rx state
-                timeSinceLastUpdate = 0
-                // tx
-                val coords = if (player==1) wallE.pos else spaceWallE.pos
-//                val thetaStr = "%.${scale}f".format(input)
-                val tx_buffer = "{\"theta\":${(coords.x * 1000).toInt()}, \"phi\":${(coords.y * 1000).toInt()}, \"bomb\": ${bombWallE != null}}".toByteArray()
-                val tx_packet = DatagramPacket(tx_buffer, tx_buffer.size, InetAddress.getByName(HOST), server_udp_port)
-                tx_udp_socket.send(tx_packet)
-                // rx
-                try {
-                    val rx_buffer = ByteArray(4096)
-                    val rx_packet = DatagramPacket(rx_buffer, rx_buffer.size)
-                    server_udp_socket.receive(rx_packet)
-                    val rx = JSONObject(String(rx_packet.data))
-                    other_theta = rx["theta"] as Int / 1000f
-                    other_phi = rx["phi"] as Int / 1000f
-                    bomb = rx["bomb"] as Boolean
-                    // TODO: update state with other player
-                } catch (e: SocketTimeoutException) {
+            if (ENABLE_MULTIPLAYER) {
 
+                timeSinceLastUpdate = System.nanoTime()
+                if (deltaT >= TIME_BETWEEN_PACKET_UPDATE) {
+                    // tx state and rx state
+                    timeSinceLastUpdate = 0
+                    // tx
+                    val coords = if (player==1) wallE.pos else spaceWallE.pos
+//                val thetaStr = "%.${scale}f".format(input)
+                    val tx_buffer = "{\"theta\":${(coords.x * 1000).toInt()}, \"phi\":${(coords.y * 1000).toInt()}, \"bomb\": ${bombWallE != null}}".toByteArray()
+                    val tx_packet = DatagramPacket(tx_buffer, tx_buffer.size, InetAddress.getByName(HOST), server_udp_port)
+                    tx_udp_socket.send(tx_packet)
+                    // rx
+                    try {
+                        val rx_buffer = ByteArray(4096)
+                        val rx_packet = DatagramPacket(rx_buffer, rx_buffer.size)
+                        server_udp_socket.receive(rx_packet)
+                        val rx = JSONObject(String(rx_packet.data))
+                        other_theta = rx["theta"] as Int / 1000f
+                        other_phi = rx["phi"] as Int / 1000f
+                        bomb = rx["bomb"] as Boolean
+                        // TODO: update state with other player
+                    } catch (e: SocketTimeoutException) {
+
+                    }
                 }
             }
+
         }
     }
 
