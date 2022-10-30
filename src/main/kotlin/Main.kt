@@ -214,12 +214,14 @@ class Game : PApplet() {
 
 
     fun camTopDown() {
-        var cartWallE: PVector = if(isWallE == 1)
+        var cartWallE: PVector = if(player == 1)
             wallE.pos.toXyz()
         else
             spaceWallE.pos.toXyz()
         val centre = cartWallE
-        val eyepos = cartWallE * 1.2f
+        var eyepos = cartWallE * 1.2f
+        if(player == 1)
+                eyepos = cartWallE * 2f
         val up = PVector(0f,1f,0f)
         camera(eyepos.x, eyepos.y, eyepos.z, centre.x, centre.y, centre.z, up.x,up.y,up.z)
     }
@@ -314,7 +316,7 @@ class Game : PApplet() {
 
     fun updateMovements() {
         enemies.forEach { it.update(wallE) }
-        if(isWallE == 1) {
+        if(player == 1) {
             spaceWallE.randUpdate()
             wallE.update(input)
         }
@@ -421,6 +423,8 @@ class Game : PApplet() {
     }
 
     var counter = 0
+
+
     override fun draw() {
 
         if (gameScreen == 0) {
@@ -433,7 +437,8 @@ class Game : PApplet() {
                 // tx state and rx state
                 timeSinceLastUpdate = 0
                 // tx
-                val tx_buffer = "{\"Hello\":123}".toByteArray()
+                val coords = if (player==1) wallE.pos else spaceWallE.pos
+                val tx_buffer = "{\"theta\":${coords.x}, \"phi\":${coords.y}, \"bomb\": ${bombWallE != null}}".toByteArray()
                 val tx_packet = DatagramPacket(tx_buffer, tx_buffer.size, InetAddress.getByName(HOST), server_udp_port)
                 tx_udp_socket.send(tx_packet)
                 // rx
