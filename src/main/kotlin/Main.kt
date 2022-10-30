@@ -1,10 +1,17 @@
 import processing.core.PApplet
 import processing.core.PVector
-import java.util.Spliterators
+import org.json.*
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
+import java.net.Socket
+import java.util.*
+import javax.xml.crypto.Data
+import kotlin.math.cos
+import kotlin.math.sin
+import java.util.InputMismatchException
 import kotlin.math.*
 
-//import ejml
-//import org.ejml.
 
 // game loop driver fun
 //override fun draw() {
@@ -19,6 +26,16 @@ import kotlin.math.*
 //}
 
 const val EARTH_RADIUS = 100f
+const val HOST = "pc8-015-l.cs.st-andrews.ac.uk"
+const val HOST_TCP_PORT = 25565
+const val MAGIC_ROOM_ID = 1337
+const val ENABLE_MULTIPLAYER = false
+var gameScreen = 0
+// ms
+var TIME_SINCE_LAST_STATE_UPDATE = 100
+
+operator fun PVector.times(other: Float) = PVector.mult(this, other)
+operator fun PVector.plus(other: PVector) = PVector.add(this, other)
 
 data class Input(
     var isUp: Boolean = false,
@@ -28,8 +45,10 @@ data class Input(
 )
 typealias SphericalCoords = PVector
 fun SphericalCoords.r() = this.z
-fun SphericalCoords.theta(): Float = this.x
+fun SphericalCoords.theta() = this.x
 fun SphericalCoords.phi() = this.y
+
+
 
 fun SphericalCoords.toXyz(): PVector {
     val x1 = sin(theta()) * cos(phi())
@@ -76,54 +95,26 @@ data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float 
             pushMatrix()
             translate(position.x,position.y,position.z)
             circle(0f,0f,size)
-            fill(255f,0f,0f)
-            circle(sin(rot),cos(rot),2f)
             popMatrix()
         }
     }
 
-    var angle = 0.0f
     fun update(input: Input) {
-//        val movementSpeed = 0.01f
-//        angle += 0.01f
-//        val lookSpeed = 0.01f
+        val movementSpeed = 0.01f
+        val lookSpeed = 0.01f
 
+        var isMoving = false
         when {
-            input.isUp -> pos.x += 0.01f
-            input.isDown -> pos.x -= 0.01f
-            input.isLeft -> pos.y += 0.01f
-            input.isRight -> pos.y -= 0.01f
+            input.isUp -> isMoving = true
+//            input.isDown -> pos.x -= movementSpeed
+            input.isLeft -> rot += lookSpeed
+            input.isRight -> rot -= lookSpeed
         }
 
+        // actually move!!!!
+        
 
-//        // actually move!!!!
-//        // translate to wallE position
-//        val wallEPos = pos.toXyz()
-////        val up = wallEPos.copy().normalize()
-////        wallEPos.x * up.x +
-//        // new point is wallE pos + 1 (in X let's say)
-////        val newPos = pos.copy().toXyz()
-////            .rotateAngleAxis(angle, PVector(0f,1f,0f))
-////            .toSpherical()
-//
-////        angle += 0.01f
-//
-//        val newPos = wallEPos
-////            // go to wallE reference frame
-////            .rotateAngleAxis(pos.theta(), PVector(0f,1f,0f))
-////            .rotateAngleAxis(pos.phi(), PVector(0f,0f,1f))
-////            .rotateAngleAxis(rot, PVector(0f,1f,0f))
-////            // step forward by 1
-////            .add(100f,0f,0f)
-////            .rotateAngleAxis(-rot, PVector(0f,1f,0f))
-////            // go back to world coords
-////            .rotateAngleAxis(-pos.phi(), PVector(0f,0f,1f))
-////            .rotateAngleAxis(-pos.theta(), PVector(0f,1f,0f))
-//            .toSpherical()
-//
-////        newPos.z = EARTH_RADIUS + 2
-//
-//        pos.set(newPos)
+
     }
 }
 
@@ -156,7 +147,6 @@ class Game : PApplet() {
         fullScreen(P3D)
     }
 
-    operator fun PVector.times(other: Float) = PVector.mult(this, other)
 
     fun camTopDown() {
         val cartWallE = wallE.pos.toXyz()
@@ -178,8 +168,8 @@ class Game : PApplet() {
         val cartWallE = wallE.pos.toXyz()
         val eyepos = cartWallE
         val centre = cartWallE * 2f
-        val up = PVector(0f,1f,0f)
-        camera(eyepos.x, eyepos.y, eyepos.z, centre.x, centre.y, centre.z, up.x,up.y,up.z)
+        val up = TODO() // needs to be walle up ie pos.XYZ.norm
+//        camera(eyepos.x, eyepos.y, eyepos.z, centre.x, centre.y, centre.z, up.x,up.y,up.z)
     }
 
     fun setupCam() {
@@ -213,13 +203,14 @@ class Game : PApplet() {
         }
     }
 
-    var theta = 1f
-    var phi = 0f
-
-    override fun draw() {
-        rotate(radians(90f))
-        background(0f)
-//        val eyepos =
+    fun homeScreen() {
+        background(0);
+        textAlign(CENTER);
+        text("Click to start", height/2.toFloat(), width/2.toFloat());
+    }
+    fun gameScreen() {
+        background(-1f)
+        val eyepos =
 
 //        camera(cartWallE.x, cartWallE.y, cartWallE.z, eyepos.x, eyepos.y, eyepos.z, up.x,up.y,up.z)
         setupCam()
@@ -235,25 +226,73 @@ class Game : PApplet() {
         sphere(EARTH_RADIUS)
         popMatrix()
         fill(255f)
-
-
-//        // test
-//        pushMatrix()
-////        theta+=0.1f
-//        phi+=0.1f
-//        val testPos = SphericalCoords(theta, phi, EARTH_RADIUS+1).toXyz()
-//        translate(testPos.x, testPos.y,testPos.z)
-//        circle(0f,0f,50f)
-//        popMatrix()
-
-
-
         wallE.draw(this)
         moon.draw(this)
         moon.pos.x += 0.01f
-
         wallE.update(input)
         popMatrix()
+    }
+
+
+    override fun mousePressed() {
+        // if we are on the initial screen when clicked, start the game
+        if (gameScreen == 0) {
+            startGame()
+        }
+    }
+
+
+    fun startGame() {
+        // Handle Network handshake then change gameScreen to 1
+        kotlin.io.println("Trying to start game?")
+
+        if (ENABLE_MULTIPLAYER) {
+            // init tcp connection to server
+            // connect to magic number port and host over TCP
+            val server_tcp_socket = Socket(HOST, HOST_TCP_PORT)
+            // send magic room number to server
+            server_tcp_socket.outputStream.write(("{\"room_id\":$MAGIC_ROOM_ID}").toByteArray())
+            // wait... get udp port number to open a tx socket to
+            val scanner = Scanner(server_tcp_socket.getInputStream())
+            var msg = ""
+            while (scanner.hasNextLine()) {
+                msg = scanner.nextLine()
+                break
+            }
+            val json_msg = JSONObject(msg)
+            val server_udp_port: Int = json_msg["server_port"] as Int
+
+            val server_udp_socket = DatagramSocket()
+            //server_udp_socket.connect(InetAddress.getByName(HOST), server_udp_port)
+            // open local udp socket and connect to remove server udp port
+            val client_udp_port = server_udp_socket.localPort
+            // send our port to server
+            server_tcp_socket.outputStream.write(("{\"port\":$client_udp_port}").toByteArray())
+
+            // rx initial game state
+            val buffer = ByteArray(4096)
+            val packet = DatagramPacket(buffer, buffer.size)
+            server_udp_socket.receive(packet)
+            // TODO: parse game state and use it to init next screen
+            println(JSONObject(String(packet.data)))
+
+            ///  Example tx echo to server
+            //val tx_packet = DatagramPacket(packet.data, packet.data.size, InetAddress.getByName(HOST), server_udp_port)
+            //server_udp_socket.send(tx_packet)
+
+            // TODO: gameloop should include reading from UDP socket and writing state to server
+        }
+
+        gameScreen = 1
+    }
+
+    override fun draw() {
+
+        if (gameScreen == 0) {
+            homeScreen()
+        } else {
+            gameScreen()
+        }
     }
 
 
@@ -275,3 +314,19 @@ fun main(args: Array<String>) {
     // Learn more about running applications: https://www.jetbrains.com/help/idea/running-applications.html.
     println("Program arguments: ${args.joinToString()}")
 }
+
+//Update yaw (note that this is done using a rotation about the local up axis):
+// person.rotate_about_local_up(yaw_delta);
+
+// Update the position. This will move the player tangent to the sphere, so after this step/
+// the player will be 'floating' above the sphere a bit.
+// person.position += person.forward * speed * time_step;
+
+// Get the sphere normal corresponding to the point directly under the player:vector
+// normal = normalize(person.position);
+
+// Drop the player back down to the surface:person.position = normal * sphere.radius;
+// Now the person is on the surface, but probably isn't perfectly 'upright' with respect
+// to it, so we apply a normalizing relative rotation to correct this:
+// matrix rotation = matrix_rotate_vec_to_vec(person.up, normal);
+// person.apply_rotation(rotation);

@@ -2,4 +2,4 @@
 processing*
 *.iml
 out/*
-out
+*.jar
