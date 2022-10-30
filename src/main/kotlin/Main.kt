@@ -40,6 +40,10 @@ val tx_udp_socket = DatagramSocket()
 
 var player = -1
 
+var other_theta = -1F
+var other_phi = -1F
+var bomb = false
+
 operator fun PVector.times(other: Float) = PVector.mult(this, other)
 operator fun PVector.plus(other: PVector) = PVector.add(this, other)
 
@@ -68,6 +72,7 @@ fun SphericalCoords.toXyz(): PVector {
 fun PVector.toSpherical(): SphericalCoords {
     val r = sqrt(x.pow(2) + y.pow(2) + z.pow(2))
     val theta = atan(y / x)
+
     val phi = acos(z / r)
     return SphericalCoords(theta, phi, r)
 }
@@ -447,7 +452,9 @@ class Game : PApplet() {
                     val rx_packet = DatagramPacket(rx_buffer, rx_buffer.size)
                     server_udp_socket.receive(rx_packet)
                     val rx = JSONObject(String(rx_packet.data))
-                    println(rx)
+                    other_theta = rx["theta"] as Float
+                    other_phi = rx["phi"] as Float
+                    bomb = rx["bomb"] as Boolean
                     // TODO: update state with other player
                 } catch (e: SocketTimeoutException) {
 
