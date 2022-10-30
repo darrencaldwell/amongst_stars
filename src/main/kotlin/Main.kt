@@ -65,16 +65,36 @@ fun SphericalCoords.toXyz(): PVector {
 
 fun PVector.toSpherical(): SphericalCoords {
     val r = sqrt(x.pow(2) + y.pow(2) + z.pow(2))
-    val theta = atan(y/x)
-    val phi = acos(z/r)
+    val theta = atan(x/z)
+    val phi = acos(y/r)
     return SphericalCoords(theta, phi, r)
+}
+
+fun PVector.rotateAngleAxis(theta: Float, axis: PVector): PVector {
+    val axisNormalised = axis.copy().normalize()
+    val u = axisNormalised.x
+    val v = axisNormalised.y
+    val w = axisNormalised.z
+
+    val xPrime =
+        u * (u * x + v * y + w * z) * (1.0 - cos(theta)) + x * cos(theta) + (-w * y + v * z) * sin(
+            theta
+        )
+    val yPrime =
+        v * (u * x + v * y + w * z) * (1.0 - cos(theta)) + y * cos(theta) + (w * x - u * z) * sin(
+            theta
+        )
+    val zPrime =
+        w * (u * x + v * y + w * z) * (1.0 - cos(theta)) + z * cos(theta) + (-v * x + u * y) * sin(
+            theta
+        )
+    return PVector(xPrime.toFloat(), yPrime.toFloat(), zPrime.toFloat())
+
 }
 
 data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float = 0f) {
     fun draw(app: PApplet) {
         val position = pos.toXyz()
-//        val posToUp = position.cross(PVector(0f,1f,0f))
-
         with(app) {
             pushMatrix()
             translate(position.x,position.y,position.z)
@@ -87,29 +107,17 @@ data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float 
         val movementSpeed = 0.01f
         val lookSpeed = 0.01f
 
-//        var isMoving = false
-//        when {
-////            input.isUp -> isMoving = true
-////            input.isDown -> pos.x -= movementSpeed
-////            input.isLeft -> rot += lookSpeed
-////            input.isRight -> rot -= lookSpeed
-//            input.isUp -> pos.x += movementSpeed
+        var isMoving = false
+        when {
+            input.isUp -> isMoving = true
 //            input.isDown -> pos.x -= movementSpeed
-//            input.isLeft -> pos.y += lookSpeed
-//            input.isRight -> pos.y -= lookSpeed
-//        }
+            input.isLeft -> rot += lookSpeed
+            input.isRight -> rot -= lookSpeed
+        }
 
+        // actually move!!!!
+        
 
-//         actually move!!!
-//        val wallePos = pos.toXyz()
-//        val u = wallePos.copy().normalize()
-////        val x = wallePos.copy().add(PVector(0.000000000000000000000000001f,0f,0f))
-////        val x = u
-////        val newPosCart = u * u.dot(x) + u.cross(x) * cos(rot) + u.cross(x) * sin(rot)
-//        val a = wallePos.add(PVector(0.01f, 0f, 0f))
-
-        pos.set(pos.toXyz().add(0f,0f,1f).toSpherical())
-//        pos.set(wallePos.toSpherical())
 
     }
 }
@@ -208,18 +216,22 @@ class Game : PApplet() {
         val eyepos =
 
 //        camera(cartWallE.x, cartWallE.y, cartWallE.z, eyepos.x, eyepos.y, eyepos.z, up.x,up.y,up.z)
-            setupCam()
+        setupCam()
         pushMatrix()
-//        val pos = PVector(width.toFloat()/1f, height.toFloat()/2f,100f)
+//        val pos = PVector(width.toFloat()/2f, height.toFloat()/2f,100f)
 //        with(pos) {
 //            translate(x,y,z)
 //        }
-        fill(-1f, 0f, 200f)
+
+        fill(0f, 0f, 200f)
+        pushMatrix()
+        rotateX(radians(90f))
         sphere(EARTH_RADIUS)
-        fill(254f)
+        popMatrix()
+        fill(255f)
         wallE.draw(this)
         moon.draw(this)
-        moon.pos.x += -1.01f
+        moon.pos.x += 0.01f
         wallE.update(input)
         popMatrix()
     }
