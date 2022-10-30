@@ -1,6 +1,12 @@
 import processing.core.PApplet
 import processing.core.PVector
-import java.util.InputMismatchException
+import org.json.*
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
+import java.net.Socket
+import java.util.*
+import javax.xml.crypto.Data
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -18,6 +24,11 @@ import kotlin.math.sin
 //}
 
 const val EARTH_RADIUS = 100f
+const val HOST = "pc8-015-l.cs.st-andrews.ac.uk"
+const val HOST_TCP_PORT = 25565
+const val MAGIC_ROOM_ID = 1337
+const val ENABLE_MULTIPLAYER = false
+var gameScreen = 0
 
 data class Input(
     var isUp: Boolean = false,
@@ -157,25 +168,92 @@ class Game : PApplet() {
         }
     }
 
-    override fun draw() {
-        background(0f)
+    fun homeScreen() {
+        background(0);
+        textAlign(CENTER);
+        text("Click to start", height/2.toFloat(), width/2.toFloat());
+    }
+    fun gameScreen() {
+        background(-1f)
         val eyepos =
 
 //        camera(cartWallE.x, cartWallE.y, cartWallE.z, eyepos.x, eyepos.y, eyepos.z, up.x,up.y,up.z)
-        setupCam()
+            setupCam()
         pushMatrix()
-//        val pos = PVector(width.toFloat()/2f, height.toFloat()/2f,100f)
+//        val pos = PVector(width.toFloat()/1f, height.toFloat()/2f,100f)
 //        with(pos) {
 //            translate(x,y,z)
 //        }
-        fill(0f, 0f, 200f)
+        fill(-1f, 0f, 200f)
         sphere(EARTH_RADIUS)
-        fill(255f)
+        fill(254f)
         wallE.draw(this)
         moon.draw(this)
-        moon.pos.x += 0.01f
+        moon.pos.x += -1.01f
         wallE.update(input)
         popMatrix()
+    }
+
+
+    override fun mousePressed() {
+        // if we are on the initial screen when clicked, start the game
+        if (gameScreen == 0) {
+            startGame()
+        }
+    }
+
+
+    fun startGame() {
+        // Handle Network handshake then change gameScreen to 1
+        kotlin.io.println("Trying to start game?")
+
+        if (ENABLE_MULTIPLAYER) {
+            // init tcp connection to server
+            // connect to magic number port and host over TCP
+            val server_tcp_socket = Socket(HOST, HOST_TCP_PORT)
+            // send magic room number to server
+            server_tcp_socket.outputStream.write(("{\"room_id\":$MAGIC_ROOM_ID}").toByteArray())
+            // wait... get udp port number to open a tx socket to
+            val scanner = Scanner(server_tcp_socket.getInputStream())
+            var msg = ""
+            while (scanner.hasNextLine()) {
+                msg = scanner.nextLine()
+                break
+            }
+            val json_msg = JSONObject(msg)
+            val server_udp_port: Int = json_msg["server_port"] as Int
+
+            val server_udp_socket = DatagramSocket()
+            //server_udp_socket.connect(InetAddress.getByName(HOST), server_udp_port)
+            // open local udp socket and connect to remove server udp port
+            val client_udp_port = server_udp_socket.localPort
+            // send our port to server
+            server_tcp_socket.outputStream.write(("{\"port\":$client_udp_port}").toByteArray())
+
+            // rx initial game state
+            val buffer = ByteArray(4096)
+            val packet = DatagramPacket(buffer, buffer.size)
+            server_udp_socket.receive(packet)
+            // TODO: parse game state and use it to init next screen
+            println(JSONObject(String(packet.data)))
+
+            ///  Example tx echo to server
+            //val tx_packet = DatagramPacket(packet.data, packet.data.size, InetAddress.getByName(HOST), server_udp_port)
+            //server_udp_socket.send(tx_packet)
+
+            // TODO: gameloop should include reading from UDP socket and writing state to server
+        }
+
+        gameScreen = 1
+    }
+
+    override fun draw() {
+
+        if (gameScreen == 0) {
+            homeScreen()
+        } else {
+            gameScreen()
+        }
     }
 
 

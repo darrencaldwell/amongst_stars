@@ -13,7 +13,7 @@ import threading
 import time
 import json
 
-HOST = "pc8-016-l.cs.st-andrews.ac.uk"
+HOST = "pc8-015-l.cs.st-andrews.ac.uk"
 TCP_PORT = 25565
 ENCODING = "utf-8"
 
@@ -23,14 +23,24 @@ rooms_lock = threading.Lock()
 
 def rx_json(socket):
     while True:
-        data = socket.recv(4096).decode(ENCODING)
+        data = socket.recv(4096).decode(ENCODING).rstrip('\x00').rstrip('\n')
         if len(data) > 0:
             return json.loads(data)
 
 
-def tx_json(socket, json_data):
-    msg = bytes(json.dumps(json_data),ENCODING)
+def tx_json_tcp(socket, json_data):
+    msg = bytes(json.dumps(json_data)+"\n",ENCODING)
     socket.sendall(msg)
+
+def tx_json_udp(socket, address, port, json_data):
+    msg = bytes(json.dumps(json_data)+"\n",ENCODING)
+    socket.sendto(msg, (address,port))
+
+def rx_json_udp(socket):
+    data, addr = socket.recvfrom(4096)
+    data = data.decode(ENCODING).rstrip('\x00').rstrip('\n')
+    print("rx_json_udp: got udp rx from " + str(addr))
+    return json.loads(data)
 
 
 def thread_on_new_client(client_socket, addr):
@@ -52,11 +62,11 @@ def thread_on_new_client(client_socket, addr):
             msg = "ERROR: woah cow person... room " + str(room_id) + " already full, idiot.\n"
             client_socket.send(msg.encode(ENCODING))
             client_socket.close()
-        else: 
+        else:
             print("on_new_client: player 2 joined room_id " + str(room_id))
             rooms[room_id].append({"socket": client_socket, "addr": addr})
 
-    rooms_lock.release()    
+    rooms_lock.release()
 
 
 def thread_new_room(room_id):
@@ -80,8 +90,8 @@ def thread_new_room(room_id):
 
     # send server UDP ports to clients
     data = {"server_port": port}
-    tx_json(socket_a, data)
-    tx_json(socket_b, data)
+    tx_json_tcp(socket_a, data)
+    tx_json_tcp(socket_b, data)
 
     # get tx UDP ports from clients
     player_a_udp_port = rx_json(socket_a)["port"]
@@ -93,10 +103,13 @@ def thread_new_room(room_id):
 
     # open tx sockets
     tx_udp_socket_a = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    tx_udp_socket_a.bind((ip_addr_a, player_a_udp_port))
-
     tx_udp_socket_b = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    tx_udp_socket_b.bind((ip_addr_b, player_b_udp_port))
+
+    data = {"hello": "cow person"}
+    tx_json_udp(tx_udp_socket_a, ip_addr_a, player_a_udp_port, data)
+    tx_json_udp(tx_udp_socket_b, ip_addr_b, player_b_udp_port, data)
+
+    print(rx_json_udp(rx_udp_socket))
 
     # send initial game state
 
@@ -125,12 +138,12 @@ def start_server():
         s.setsockopt(SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((HOST, TCP_PORT))
         s.listen()
-        
+
         while True:
             conn, addr = s.accept()
             thread = threading.Thread(target = thread_on_new_client, args = (conn, addr))
             thread.start()
-            
+
 
 if __name__ == "__main__":
    start_server()
