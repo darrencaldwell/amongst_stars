@@ -1,5 +1,5 @@
 .idea
 processing*
 *.iml
-out/*
+out
 *.jar
