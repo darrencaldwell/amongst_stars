@@ -304,16 +304,19 @@ class Game : PApplet() {
 
     var killedEnemies = mutableListOf<Enemy>()
     var wallELives = 3
-    var invincibleTime = 1000
-    var lastHit = 0f
+    var invincibleTime = 1000f
+    var lastHit = 0L
 
     fun handleCollisions() {
         enemies.forEach {
             if (checkCollision(this, wallE.pos, wallE.size, it.pos, it.size)) {
-                println("was hit!")
                 if(System.currentTimeMillis() - lastHit > invincibleTime) {
-                    lastHit = System.currentTimeMillis().toFloat()
+                    lastHit = System.currentTimeMillis()
                     wallELives--
+                    if(wallELives == 0) {
+                        text("GAME OVER", width/2f, height/2f)
+                        System.exit(0)
+                    }
                 }
             }
             if (bombWallE != null && checkCollision(this, bombWallE!!.pos, currExplosionSize, it.pos, it.size)) {
@@ -358,14 +361,25 @@ class Game : PApplet() {
                 bombStartTime = System.currentTimeMillis()
             }
         }
+        handleCollisions()
         moon.pos.x += 0.001f
     }
 
     var currExplosionSize = 0f
-
+    var spawningTime = 10*1000f
+    var lastSpawnTime = System.currentTimeMillis()
     fun runGame() {
+        println(enemies.size)
+//        System.out.println(System.currentTimeMillis()-lastSpawnTime)
+//        System.out.println(lastSpawnTime)
+//        System.out.println(spawningTime)
+        if((System.currentTimeMillis()-lastSpawnTime) > spawningTime) {
+            addEnemy()
+            lastSpawnTime = System.currentTimeMillis()
+        }
         background(0f)
         setupCam()
+        text("LIVES: " + wallELives, width/2f, height/2f)
 
         noStroke()
 
