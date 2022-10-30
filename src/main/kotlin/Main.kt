@@ -9,6 +9,8 @@ import java.util.*
 import javax.xml.crypto.Data
 import kotlin.math.cos
 import kotlin.math.sin
+import java.util.InputMismatchException
+import kotlin.math.*
 
 
 // game loop driver fun
@@ -32,6 +34,9 @@ var gameScreen = 0
 // ms
 var TIME_SINCE_LAST_STATE_UPDATE = 100
 
+operator fun PVector.times(other: Float) = PVector.mult(this, other)
+operator fun PVector.plus(other: PVector) = PVector.add(this, other)
+
 data class Input(
     var isUp: Boolean = false,
     var isDown: Boolean = false,
@@ -54,9 +59,18 @@ fun SphericalCoords.toXyz(): PVector {
     return ret
 }
 
+fun PVector.toSpherical(): SphericalCoords {
+    val r = sqrt(x.pow(2) + y.pow(2) + z.pow(2))
+    val theta = atan(y/x)
+    val phi = acos(z/r)
+    return SphericalCoords(theta, phi, r)
+}
+
 data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float = 0f) {
     fun draw(app: PApplet) {
         val position = pos.toXyz()
+//        val posToUp = position.cross(PVector(0f,1f,0f))
+
         with(app) {
             pushMatrix()
             translate(position.x,position.y,position.z)
@@ -69,17 +83,29 @@ data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float 
         val movementSpeed = 0.01f
         val lookSpeed = 0.01f
 
-        var isMoving = false
-        when {
-            input.isUp -> isMoving = true
+//        var isMoving = false
+//        when {
+////            input.isUp -> isMoving = true
+////            input.isDown -> pos.x -= movementSpeed
+////            input.isLeft -> rot += lookSpeed
+////            input.isRight -> rot -= lookSpeed
+//            input.isUp -> pos.x += movementSpeed
 //            input.isDown -> pos.x -= movementSpeed
-            input.isLeft -> rot += lookSpeed
-            input.isRight -> rot -= lookSpeed
-        }
+//            input.isLeft -> pos.y += lookSpeed
+//            input.isRight -> pos.y -= lookSpeed
+//        }
 
-        // actually move!!!!
-        
 
+//         actually move!!!
+//        val wallePos = pos.toXyz()
+//        val u = wallePos.copy().normalize()
+////        val x = wallePos.copy().add(PVector(0.000000000000000000000000001f,0f,0f))
+////        val x = u
+////        val newPosCart = u * u.dot(x) + u.cross(x) * cos(rot) + u.cross(x) * sin(rot)
+//        val a = wallePos.add(PVector(0.01f, 0f, 0f))
+
+        pos.set(pos.toXyz().add(0f,0f,1f).toSpherical())
+//        pos.set(wallePos.toSpherical())
 
     }
 }
@@ -113,7 +139,6 @@ class Game : PApplet() {
         fullScreen(P3D)
     }
 
-    operator fun PVector.times(other: Float) = PVector.mult(this, other)
 
     fun camTopDown() {
         val cartWallE = wallE.pos.toXyz()
@@ -135,8 +160,8 @@ class Game : PApplet() {
         val cartWallE = wallE.pos.toXyz()
         val eyepos = cartWallE
         val centre = cartWallE * 2f
-        val up = PVector(0f,1f,0f)
-        camera(eyepos.x, eyepos.y, eyepos.z, centre.x, centre.y, centre.z, up.x,up.y,up.z)
+        val up = TODO() // needs to be walle up ie pos.XYZ.norm
+//        camera(eyepos.x, eyepos.y, eyepos.z, centre.x, centre.y, centre.z, up.x,up.y,up.z)
     }
 
     fun setupCam() {
@@ -277,3 +302,19 @@ fun main(args: Array<String>) {
     // Learn more about running applications: https://www.jetbrains.com/help/idea/running-applications.html.
     println("Program arguments: ${args.joinToString()}")
 }
+
+//Update yaw (note that this is done using a rotation about the local up axis):
+// person.rotate_about_local_up(yaw_delta);
+
+// Update the position. This will move the player tangent to the sphere, so after this step/
+// the player will be 'floating' above the sphere a bit.
+// person.position += person.forward * speed * time_step;
+
+// Get the sphere normal corresponding to the point directly under the player:vector
+// normal = normalize(person.position);
+
+// Drop the player back down to the surface:person.position = normal * sphere.radius;
+// Now the person is on the surface, but probably isn't perfectly 'upright' with respect
+// to it, so we apply a normalizing relative rotation to correct this:
+// matrix rotation = matrix_rotate_vec_to_vec(person.up, normal);
+// person.apply_rotation(rotation);
