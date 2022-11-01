@@ -1,34 +1,27 @@
+import com.jogamp.opengl.math.Quaternion
 import processing.core.PApplet
 import processing.core.PVector
 import org.json.*
 import java.net.*
 import java.util.*
-import javax.xml.crypto.Data
-import kotlin.math.cos
-import kotlin.math.sin
 import processing.core.PVector.dist
-import java.util.InputMismatchException
 import kotlin.math.*
 import kotlin.random.Random
 
+import glm_.glm
+import glm_.mat4x4.Mat4
+import glm_.quat.Quat
+import glm_.vec3.Vec3
+import glm_.vec3.swizzle.xyz
+import glm_.vec4.Vec4
+import glm_.vec4.swizzle.xyz
 
-// game loop driver fun
-//override fun draw() {
-//
-////    when (state) {
-////        GAMESTATE.PREGAME  -> landingScreen()
-////        GAMESTATE.PREWAVE  -> prewaveScreen()
-////        GAMESTATE.WAVE     -> game.draw()
-////        GAMESTATE.ENDWAVE -> endWave.draw()
-////        GAMESTATE.GAMEOVER -> gameoverScreen()
-////    }
-//}
 
 const val EARTH_RADIUS = 100f
-const val HOST = "pc8-016-l.cs.st-andrews.ac.uk"
+const val HOST = "192.168.24.126"
 const val HOST_TCP_PORT = 25565
 const val MAGIC_ROOM_ID = 1337
-const val ENABLE_MULTIPLAYER = true
+const val ENABLE_MULTIPLAYER = false
 var gameScreen = 0
 var timeSinceLastUpdate: Long = 0
 // ms
@@ -38,7 +31,8 @@ var server_udp_port: Int = -1
 val server_udp_socket = DatagramSocket()
 val tx_udp_socket = DatagramSocket()
 
-var player = -1
+//var player = -1
+var player = 1
 
 var other_theta = -1F
 var other_phi = -1F
@@ -60,44 +54,24 @@ fun SphericalCoords.phi() = this.y
 
 
 
-fun SphericalCoords.toXyz(): PVector {
-    val x1 = sin(theta()) * cos(phi())
-    val y1 = sin(theta()) * sin(phi())
-    val z1 = cos(theta())
-    val ret = PVector(x1,y1,z1)
-    ret.mult(r())
-    return ret
-}
+//fun SphericalCoords.toXyz(): PVector {
+//    val x1 = sin(theta()) * cos(phi())
+//    val y1 = sin(theta()) * sin(phi())
+//    val z1 = cos(theta())
+//    val ret = PVector(x1,y1,z1)
+//    ret.mult(r())
+//    return ret
+//}
+//
+//fun PVector.toSpherical(): SphericalCoords {
+//    val r = sqrt(x.pow(2) + y.pow(2) + z.pow(2))
+//    val phi = acos(z / r)
+//    if (x == 0f) return SphericalCoords(0f, phi, r)
+//    val theta = atan(y / x)
+//
+//    return SphericalCoords(theta, phi, r)
+//}
 
-fun PVector.toSpherical(): SphericalCoords {
-    val r = sqrt(x.pow(2) + y.pow(2) + z.pow(2))
-    val theta = atan(y / x)
-
-    val phi = acos(z / r)
-    return SphericalCoords(theta, phi, r)
-}
-
-fun PVector.rotateAngleAxis(theta: Float, axis: PVector): PVector {
-    val axisNormalised = axis.copy().normalize()
-    val u = axisNormalised.x
-    val v = axisNormalised.y
-    val w = axisNormalised.z
-
-    val xPrime =
-        u * (u * x + v * y + w * z) * (1.0 - cos(theta)) + x * cos(theta) + (-w * y + v * z) * sin(
-            theta
-        )
-    val yPrime =
-        v * (u * x + v * y + w * z) * (1.0 - cos(theta)) + y * cos(theta) + (w * x - u * z) * sin(
-            theta
-        )
-    val zPrime =
-        w * (u * x + v * y + w * z) * (1.0 - cos(theta)) + z * cos(theta) + (-v * x + u * y) * sin(
-            theta
-        )
-    return PVector(xPrime.toFloat(), yPrime.toFloat(), zPrime.toFloat())
-
-}
 
 data class Enemy(val pos:SphericalCoords, val size: Float=5f, var rot: Float=0f) {
     fun draw(app : PApplet) {
@@ -106,18 +80,19 @@ data class Enemy(val pos:SphericalCoords, val size: Float=5f, var rot: Float=0f)
 
     fun update(wallE: WallE) {
         val movementSpeed = 0.01f
-        val phi = wallE.pos.phi() - pos.phi()
-        val theta = wallE.pos.theta() - pos.theta()
-        pos.y += phi*movementSpeed
-        pos.x += theta*movementSpeed
+        // todo!
+//        val phi = wallE.pos.phi() - pos.phi()
+//        val theta = wallE.pos.theta() - pos.theta()
+//        pos.y += phi*movementSpeed
+//        pos.x += theta*movementSpeed
     }
 }
 
 fun drawThings(pos: PVector, size: Float, app: PApplet) {
-    val position = pos.toXyz()
+//    val position = pos
     with(app) {
         pushMatrix()
-        translate(position.x,position.y,position.z)
+        translate(pos.x,pos.y,pos.z)
         sphere(size)
         popMatrix()
     }
@@ -129,26 +104,182 @@ data class Scrap(val pos:SphericalCoords, val size: Float= 3f) {
     }
 }
 
-data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float = 0f) {
+val globalUp = Vec3(1,0,0)
+data class WallE(val pos: PVector, val size: Float = 5f, var orientation: Quat, var rot: Float = 0f) {
+
+    companion object {
+        @JvmStatic
+        fun at_radius(r: Float, size: Float = 5f): WallE {
+            val pos = PVector(0f,0f,r)
+            // start looking north on globe
+            // player up is z axis (TOWARD us)
+
+//            // setting this to y makes us move around the equator
+//            // setting this to x makes us move around the poles
+//            // we lie on the z axis so that makes no sense
+//            val up = globalUp
+
+            val p = Vec3(pos.x,pos.y,pos.z)
+            val upWorld = p.normalize()
+
+            // look upward lets say
+            val direction = Vec3(0,1,0)
+            val orientation = glm.quatLookAt(direction, upWorld)
+//            val orientation = Quat().angleAxis(90f, upWorld)
+            return WallE(pos, size, orientation)
+
+        }
+    }
 
     fun draw(app : PApplet) {
         drawThings(pos, size, app)
+//        val eyepos = 5f
+//        app.fill(0f)
+//        drawThings(PVector(pos.x, pos.y + 5f, pos.z), 2f, app)
+
     }
 
     fun randUpdate() {
         pos.x += 0.01f
         pos.y += 0.02f
     }
-    fun update(input: Input) {
+    fun update(input: Input, app: PApplet) {
         val movementSpeed = 0.01f
-        val lookSpeed = 0.01f
+        val lookSpeed = 1f
 
-//        var isMoving = false
+        // old controller
+//        if (input.isUp) pos.x += movementSpeed
+//        if (input.isDown ) pos.x -= movementSpeed
+        var drot = 0f
+        if (input.isLeft ) drot -= lookSpeed
+        if (input.isRight) drot += lookSpeed
 
-        if (input.isUp) pos.x += movementSpeed
-        if (input.isDown ) pos.x -= movementSpeed
-        if (input.isLeft ) pos.y += lookSpeed
-        if (input.isRight) pos.y -= lookSpeed//
+
+//        print(start)
+        val startHeight = pos.mag()
+
+        // get our position vector in world coords
+        val p = Vec4(pos.x,pos.y,pos.z, 1f)
+
+        // since the planet is centred, our position vector is the same as the local up axis
+        val upWorld = p.xyz.normalize()
+
+//        val upPlayer = Vec4(0,0,1,1)
+
+        // rotate orientation by yaw
+
+        orientation = orientation + Quat().angleAxis(drot, upWorld.xyz)
+        print("drot=$drot")
+
+        val upGlobal = globalUp
+
+        // move along look vector (tangential)
+        val lookDir = (orientation.toMat4() * Vec4(upWorld, 1)).normalize()
+        val speed = 0.5f
+        val afterMove = p + lookDir * speed
+
+        with (app) {
+            val p2 = p + lookDir * 10
+            push()
+            stroke(255f,255f,0f)
+            strokeWeight(10f)
+            line(p.x,p.y,p.z,p2.x,p2.y,p2.z)
+            pop()
+        }
+
+        // move down back to surface of sphere
+        val newUpWorld = afterMove.xyz.normalize()
+        val onSphere = newUpWorld * startHeight
+
+        val finalPos = onSphere
+
+        // take rotation from old up to new up
+        // this reorients the player in world space
+        val axis = glm.cross(upWorld, newUpWorld).normalize()
+        val angle = glm.angle(upWorld, newUpWorld)
+        val rotationFromMove =  Quat().angleAxis(angle, axis)
+        println("axis=$axis angle=$angle")
+        orientation = orientation + rotationFromMove
+
+        // undo yaw adjustment
+        orientation = orientation + Quat().angleAxis(-drot, newUpWorld.xyz)
+
+        pos.set(finalPos.x,finalPos.y,finalPos.z)
+
+
+//        val rotation = Mat4().rotateX(-pos.phi()).rotateY(-pos.theta()).translate(p)
+
+        // world to player
+//        val wtp = Mat4().translate(0f,0f,-pos.r()).rotateY(-pos.theta()).rotateZ(-pos.phi())
+//        val ptw = wtp.inverse()
+//        val speed = 1f
+//        val vel = Vec4(cos(rot),sin(rot),1f, 0f) * speed
+//        val pPrimePlayer = (wtp * p) + vel
+//        val pPrime = ptw * pPrimePlayer
+////        val dehomog = pPrime.xyz / pPrime.w
+//        print("p=$p p'=$pPrime")
+
+        //Update yaw (note that this is done using a rotation about the local up axis):
+        // person.rotate_about_local_up(yaw_delta);
+
+
+        // Update the position. This will move the player tangent to the sphere, so after this step/
+        // the player will be 'floating' above the sphere a bit.
+        // person.position += person.forward * speed * time_step;
+
+        // Get the sphere normal corresponding to the point directly under the player:vector
+        // normal = normalize(person.position);
+
+        // Drop the player back down to the surface:person.position = normal * sphere.radius;
+        // Now the person is on the surface, but probably isn't perfectly 'upright' with respect
+        // to it, so we apply a normalizing relative rotation to correct this:
+        // matrix rotation = matrix_rotate_vec_to_vec(person.up, normal);
+        // person.apply_rotation(rotation);
+
+
+
+
+
+
+
+
+
+//
+        // rotate the velocity vector
+        // player rotation
+//        val look = Mat4().rotateZ(rot)
+        // always go forward
+//        val movement = ptw *
+//
+//        println(movement)
+
+
+//        val newPos = p + movement.xyz * 10000
+//        app.stroke(255f)
+//        app.strokeWeight(5f)
+//        println(rot)
+//        app.line(p.x,p.y,p.z,newPos.x,newPos.y,newPos.z)
+//        app.noStroke()
+//        val spherical = PVector(pPrime.x,pPrime.y,pPrime.z).toSpherical()
+//
+////        val oldX = spherical.y
+////        // bad maths alert, something wack has happened here
+////        spherical.x = spherical.y
+////        spherical.y = oldX
+////
+//        // hard adjust of r coord to lock us to fixed radius orbit
+//        spherical.z = r
+//        print("end = $spherical")
+
+        // don't need to dehomegenise, w is 1
+//        pos.set(PVector(pPrime.x,pPrime.y,pPrime.z))
+
+
+
+
+//        val p = SimpleMatrix(3,1,false, floatArrayOf(wallePos.x,wallePos.y,wallePos.z))
+//
+//        print(matrix)
 //         actually move!!!
 //        val wallePos = pos.toXyz()
 //        val u = wallePos.copy().normalize()
@@ -163,9 +294,9 @@ data class WallE(val pos: SphericalCoords, val size: Float = 5f, var rot: Float 
     }
 }
 
-fun checkCollision(app: PApplet, aPos: SphericalCoords, aSize: Float, bPos: SphericalCoords, bSize: Float): Boolean {
+fun checkCollision(app: PApplet, aPos: PVector, aSize: Float, bPos: PVector, bSize: Float): Boolean {
     with(app) {
-        return dist(aPos.toXyz(), bPos.toXyz()) < aSize+bSize
+        return dist(aPos, bPos) < aSize+bSize
     }
 }
 
@@ -186,9 +317,9 @@ class Game : PApplet() {
     val input: Input = Input()
     val enemies = mutableListOf<Enemy>()
     val scraps = mutableListOf<Scrap>()
-    val wallE = WallE(SphericalCoords(0f,0f, EARTH_RADIUS+2f))
-    val spaceWallE = WallE(SphericalCoords(0f, 0f, EARTH_RADIUS*3f), 35f)
-    val moon = WallE(SphericalCoords(0f, 0f, EARTH_RADIUS*5f), 50f)
+    val wallE = WallE.at_radius(EARTH_RADIUS+2f)
+    val spaceWallE = WallE.at_radius(EARTH_RADIUS*3f, 35f)
+    val moon = WallE.at_radius(EARTH_RADIUS*5f, 50f)
     var bombWallE: WallE? = null
     val scrapCounter = 0
 
@@ -214,31 +345,34 @@ class Game : PApplet() {
 
     fun camTopDown() {
         var cartWallE: PVector = if(player == 1)
-            wallE.pos.toXyz()
+            wallE.pos
         else
-            spaceWallE.pos.toXyz()
+            spaceWallE.pos
         val centre = cartWallE
-        var eyepos = cartWallE * 1.05f
+        var eyepos = cartWallE * 1.5f
         if(player == 1)
-                eyepos = cartWallE * 2f
+            eyepos = cartWallE * 2f
+
+//        val centre = PVector(0f,0f,0f)
+//        val eyepos = PVector(0f, 0f, EARTH_RADIUS * 2.5f)
         val up = PVector(0f,1f,0f)
         camera(eyepos.x, eyepos.y, eyepos.z, centre.x, centre.y, centre.z, up.x,up.y,up.z)
     }
 
     fun camTopDownAngled() {
-        val cartWallE = spaceWallE.pos.toXyz()
-        val wallE2 = spaceWallE.pos.copy()
-//        wallE2.x += 5f
-//        wallE2.y += 5f
-        val centre = cartWallE
-        var eyepos = wallE2.toXyz() * 2f
-        val up = PVector(0f,1f,0f)
-//        eyepos = up.cross(eyepos)
-        camera(eyepos.x, eyepos.y, eyepos.z, centre.x, centre.y, centre.z, up.x,up.y,up.z)
+////        val cartWallE = spaceWallE.pos.copy()
+////        val wallE2 = spaceWallE.pos.copy()
+////        wallE2.x += 5f
+////        wallE2.y += 5f
+//        val centre = cartWallE
+//        var eyepos = wallE2 * 2f
+//        val up = PVector(0f,1f,0f)
+////        eyepos = up.cross(eyepos)
+//        camera(eyepos.x, eyepos.y, eyepos.z, centre.x, centre.y, centre.z, up.x,up.y,up.z)
     }
 
     fun camBottomUp() {
-        val cartWallE = wallE.pos.toXyz()
+        val cartWallE = wallE.pos
         val eyepos = cartWallE
         val centre = cartWallE * 2f
         val up = PVector(0f,1f,0f)
@@ -246,7 +380,7 @@ class Game : PApplet() {
     }
 
     fun camFps() {
-        val cartWallE = wallE.pos.toXyz()
+        val cartWallE = wallE.pos
         val eyepos = cartWallE
         val centre = cartWallE * 2f
         val up = TODO() // needs to be walle up ie pos.XYZ.norm
@@ -282,7 +416,7 @@ class Game : PApplet() {
         }
     }
 
-    fun createBombWallE() = WallE(spaceWallE.pos.copy(), 10f)
+    fun createBombWallE(): Nothing = TODO() // WallE(spaceWallE.pos.copy(), 10f)
 
 
     override fun keyReleased() {
@@ -339,27 +473,30 @@ class Game : PApplet() {
     var isExploding = false
 
     fun updateMovements() {
-        enemies.forEach { it.update(wallE) }
+//        enemies.forEach { it.update(wallE) }
+
         if(player == 1) {
             spaceWallE.pos.x = other_theta
             spaceWallE.pos.y = other_phi
             if(bomb && bombWallE == null) {
                 bombWallE = createBombWallE()
             }
-            wallE.update(input)
+            wallE.update(input, this)
         }
         else {
             wallE.pos.x = other_theta
             wallE.pos.y = other_phi
-            spaceWallE.update(input)
+            spaceWallE.update(input, this)
         }
 
         if(!isExploding && bombWallE != null) {
-            bombWallE!!.pos.z -= 2.5f
-            if (bombWallE!!.pos.z < EARTH_RADIUS) {
-                isExploding = true
-                bombStartTime = System.currentTimeMillis()
-            }
+//            bombwa
+            TODO()
+//            bombWallE!!.pos.z -= 2.5f
+//            if (bombWallE!!.pos.z < EARTH_RADIUS) {
+//                isExploding = true
+//                bombStartTime = System.currentTimeMillis()
+//            }
         }
         handleCollisions()
         moon.pos.x += 0.001f
@@ -387,15 +524,14 @@ class Game : PApplet() {
         val bombGrow = 0.01f
         if(isExploding) {
             bombWallE?.pos?.let {
-                with (it.toXyz()) {
-                    pushMatrix()
-                    translate(x,y,z)
-                    fill(255f,255f,8f)
-                    currExplosionSize = (System.currentTimeMillis()-bombStartTime).toFloat() * bombGrow
-                    sphere(currExplosionSize)
-                    fill(255f)
-                    popMatrix()
-                }
+                pushMatrix()
+                translate(it.x,it.y,it.z)
+                fill(255f,255f,8f)
+                currExplosionSize = (System.currentTimeMillis()-bombStartTime).toFloat() * bombGrow
+                sphere(currExplosionSize)
+                fill(255f)
+                popMatrix()
+
             }
             if(System.currentTimeMillis() - bombStartTime >= bombTime) {
                 bombWallE = null
@@ -405,18 +541,23 @@ class Game : PApplet() {
 
         popMatrix()
 
-        val wallEReal = wallE.pos.toXyz()*1.1f
+        val wallEReal = wallE.pos*1.1f
         val ambience = 35f
         ambientLight(ambience,ambience,ambience)
         pointLight(255f, 255f, 153f, wallEReal.x, wallEReal.y, wallEReal.z);
         directionalLight(51f, 102f, 126f, -1f, 0f, 0f);
-        pushMatrix()
+//        pushMatrix()
         updateMovements()
         fill(0f, 0f, 200f)
+        stroke(255f)
         sphere(EARTH_RADIUS)
+        noStroke()
         // space wallE is pink
-        fill(222f,165f,164f)
-        spaceWallE.draw(this)
+        // todo: uncomment!
+//        fill(222f,165f,164f)
+//        spaceWallE.draw(this)
+
+
         // earth wallE is grey
         fill(222f)
         wallE.draw(this)
@@ -434,7 +575,7 @@ class Game : PApplet() {
             fill(255f,50f,0f)
             bombWallE?.draw(this)
         }
-        popMatrix()
+//        popMatrix()
     }
 
     override fun mousePressed() {
@@ -474,7 +615,7 @@ class Game : PApplet() {
             server_tcp_socket.outputStream.write(("{\"port\":$client_udp_port}").toByteArray())
 
             // rx initial game state
-           // val buffer = ByteArray(4096)
+            // val buffer = ByteArray(4096)
             // val packet = DatagramPacket(buffer, buffer.size)
             //server_udp_socket.receive(packet)
             // TODO: parse game state and use it to init next screen
@@ -565,3 +706,4 @@ fun main(args: Array<String>) {
 // to it, so we apply a normalizing relative rotation to correct this:
 // matrix rotation = matrix_rotate_vec_to_vec(person.up, normal);
 // person.apply_rotation(rotation);
+
