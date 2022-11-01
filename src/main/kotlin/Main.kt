@@ -133,9 +133,25 @@ data class WallE(val pos: PVector, val size: Float = 5f, var orientation: Quat, 
 
     fun draw(app : PApplet) {
         drawThings(pos, size, app)
-//        val eyepos = 5f
-//        app.fill(0f)
-//        drawThings(PVector(pos.x, pos.y + 5f, pos.z), 2f, app)
+    }
+
+    fun up() = Vec3(pos.x,pos.y,pos.z).normalize()
+    fun camlook(): Vec3 {
+        // get our position vector in world coords
+        val p = Vec4(pos.x,pos.y,pos.z, 1f)
+        // since the planet is centred, our position vector is the same as the local up axis
+        val upWorld = p.xyz.normalize()
+
+        val yaw = Quat().angleAxis(rot, upWorld)
+        val look = (
+                yaw.toMat4() * orientation.toMat4() * Vec4(upWorld, 1)
+        ).normalize().xyz
+
+        val axis = glm.cross(look, upWorld).normalize()
+        val angle = -0.5f
+        val tilt = Quat().angleAxis(angle, axis)
+
+        return glm.rotate(tilt,look)
 
     }
 
@@ -145,7 +161,7 @@ data class WallE(val pos: PVector, val size: Float = 5f, var orientation: Quat, 
     }
     fun update(input: Input, app: PApplet) {
         val movementSpeed = 0.01f
-        val lookSpeed = 1f
+        val lookSpeed = 0.07f
 
         // old controller
 //        if (input.isUp) pos.x += movementSpeed
@@ -153,9 +169,8 @@ data class WallE(val pos: PVector, val size: Float = 5f, var orientation: Quat, 
         var drot = 0f
         if (input.isLeft ) drot -= lookSpeed
         if (input.isRight) drot += lookSpeed
+        rot += drot
 
-
-//        print(start)
         val startHeight = pos.mag()
 
         // get our position vector in world coords
@@ -167,14 +182,13 @@ data class WallE(val pos: PVector, val size: Float = 5f, var orientation: Quat, 
 //        val upPlayer = Vec4(0,0,1,1)
 
         // rotate orientation by yaw
-
-        orientation = orientation + Quat().angleAxis(drot, upWorld.xyz)
-        print("drot=$drot")
+        // orientation = orientation + Quat().angleAxis(drot, upWorld)
 
         val upGlobal = globalUp
 
         // move along look vector (tangential)
-        val lookDir = (orientation.toMat4() * Vec4(upWorld, 1)).normalize()
+        val lookDir = (Quat().angleAxis(rot, upWorld).toMat4() * orientation.toMat4() * Vec4(upWorld, 1)).normalize()
+
         val speed = 0.5f
         val afterMove = p + lookDir * speed
 
@@ -202,94 +216,9 @@ data class WallE(val pos: PVector, val size: Float = 5f, var orientation: Quat, 
         orientation = orientation + rotationFromMove
 
         // undo yaw adjustment
-        orientation = orientation + Quat().angleAxis(-drot, newUpWorld.xyz)
+//        orientation = orientation + Quat().angleAxis(-drot, newUpWorld.xyz)
 
         pos.set(finalPos.x,finalPos.y,finalPos.z)
-
-
-//        val rotation = Mat4().rotateX(-pos.phi()).rotateY(-pos.theta()).translate(p)
-
-        // world to player
-//        val wtp = Mat4().translate(0f,0f,-pos.r()).rotateY(-pos.theta()).rotateZ(-pos.phi())
-//        val ptw = wtp.inverse()
-//        val speed = 1f
-//        val vel = Vec4(cos(rot),sin(rot),1f, 0f) * speed
-//        val pPrimePlayer = (wtp * p) + vel
-//        val pPrime = ptw * pPrimePlayer
-////        val dehomog = pPrime.xyz / pPrime.w
-//        print("p=$p p'=$pPrime")
-
-        //Update yaw (note that this is done using a rotation about the local up axis):
-        // person.rotate_about_local_up(yaw_delta);
-
-
-        // Update the position. This will move the player tangent to the sphere, so after this step/
-        // the player will be 'floating' above the sphere a bit.
-        // person.position += person.forward * speed * time_step;
-
-        // Get the sphere normal corresponding to the point directly under the player:vector
-        // normal = normalize(person.position);
-
-        // Drop the player back down to the surface:person.position = normal * sphere.radius;
-        // Now the person is on the surface, but probably isn't perfectly 'upright' with respect
-        // to it, so we apply a normalizing relative rotation to correct this:
-        // matrix rotation = matrix_rotate_vec_to_vec(person.up, normal);
-        // person.apply_rotation(rotation);
-
-
-
-
-
-
-
-
-
-//
-        // rotate the velocity vector
-        // player rotation
-//        val look = Mat4().rotateZ(rot)
-        // always go forward
-//        val movement = ptw *
-//
-//        println(movement)
-
-
-//        val newPos = p + movement.xyz * 10000
-//        app.stroke(255f)
-//        app.strokeWeight(5f)
-//        println(rot)
-//        app.line(p.x,p.y,p.z,newPos.x,newPos.y,newPos.z)
-//        app.noStroke()
-//        val spherical = PVector(pPrime.x,pPrime.y,pPrime.z).toSpherical()
-//
-////        val oldX = spherical.y
-////        // bad maths alert, something wack has happened here
-////        spherical.x = spherical.y
-////        spherical.y = oldX
-////
-//        // hard adjust of r coord to lock us to fixed radius orbit
-//        spherical.z = r
-//        print("end = $spherical")
-
-        // don't need to dehomegenise, w is 1
-//        pos.set(PVector(pPrime.x,pPrime.y,pPrime.z))
-
-
-
-
-//        val p = SimpleMatrix(3,1,false, floatArrayOf(wallePos.x,wallePos.y,wallePos.z))
-//
-//        print(matrix)
-//         actually move!!!
-//        val wallePos = pos.toXyz()
-//        val u = wallePos.copy().normalize()
-////        val x = wallePos.copy().add(PVector(0.000000000000000000000000001f,0f,0f))
-////        val x = u
-////        val newPosCart = u * u.dot(x) + u.cross(x) * cos(rot) + u.cross(x) * sin(rot)
-//        val a = wallePos.add(PVector(0.01f, 0f, 0f))
-
-//        pos.set(pos.toXyz().add(0f,0f,1f).toSpherical())
-//        pos.set(wallePos.toSpherical())
 
     }
 }
@@ -380,11 +309,15 @@ class Game : PApplet() {
     }
 
     fun camFps() {
-        val cartWallE = wallE.pos
-        val eyepos = cartWallE
-        val centre = cartWallE * 2f
-        val up = TODO() // needs to be walle up ie pos.XYZ.norm
-//        camera(eyepos.x, eyepos.y, eyepos.z, centre.x, centre.y, centre.z, up.x,up.y,up.z)
+        // todo: this is wrong and camlook is shit
+        val p = wallE.pos.copy()
+        val eyeHeight = 30f
+        val eyepos = p + (p.copy().normalize() * eyeHeight)
+        val look = wallE.camlook()
+        val centre = eyepos + PVector(look.x,look.y,look.z)
+
+        val up = wallE.up() // needs to be walle up ie pos.XYZ.norm
+        camera(eyepos.x, eyepos.y, eyepos.z, centre.x, centre.y, centre.z, up.x,up.y,up.z)
     }
 
     fun setupCam() {
@@ -560,7 +493,8 @@ class Game : PApplet() {
 
         // earth wallE is grey
         fill(222f)
-        wallE.draw(this)
+        if (cameraMode!=CameraMode.FPS)
+            wallE.draw(this)
         // enemies are red
         fill(255f,0f,0f)
         enemies.forEach{
